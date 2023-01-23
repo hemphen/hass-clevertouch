@@ -1,0 +1,15 @@
+{
+  "domain": "clevertouch",
+  "name": "Clever Touch E3",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/clevertouch",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@hemphen"
+  ],
+  "iot_class": "cloud_polling"
+}
