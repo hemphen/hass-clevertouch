@@ -343,7 +343,7 @@ class Radiator(Device):
 
     _TEMPS_AVAILABLE = [TEMP_ECO, TEMP_FROST, TEMP_COMFORT, TEMP_CURRENT, TEMP_BOOST]
     _TEMPS_READONLY = [TEMP_CURRENT, TEMP_TARGET, TEMP_BOOST]
-    _MODES_AVAILABLE = [MODE_ECO, MODE_FROST, MODE_PROGRAM, MODE_OFF]
+    _MODES_AVAILABLE = [MODE_COMFORT, MODE_ECO, MODE_FROST, MODE_PROGRAM, MODE_OFF]
 
     def __init__(self, home: SmartHome, data: dict) -> None:
         super().__init__(home, data, Device.DEVICE_RADIATOR)
