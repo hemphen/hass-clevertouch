@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .clevertouch.clevertouch import Radiator
+from clevertouch.clevertouch import Radiator
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 

@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import DOMAIN
-from .clevertouch.clevertouch import Radiator
+from clevertouch.clevertouch import Radiator
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 _LOGGER = logging.getLogger(__name__)

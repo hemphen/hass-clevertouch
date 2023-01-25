@@ -17,7 +17,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import DOMAIN
-from .clevertouch.clevertouch import ApiSession, SmartHome, Device
+from clevertouch.clevertouch import ApiSession, SmartHome, Device
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 300
 SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS)

@@ -12,7 +12,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .clevertouch.clevertouch import ApiSession, ApiException
+from clevertouch.clevertouch import ApiSession, ApiException
 
 from .const import DOMAIN
 
