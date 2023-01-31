@@ -40,7 +40,7 @@ git clone https://github.com/hemphen/hass-clevertouch.git clevertouch
 A specific release can be installed by adding a `--branch` flag to the `clone` command, e.g
 
 ```bash
-git clone https://github.com/hemphen/hass-clevertouch.git clevertouch --branch v2.0.1
+git clone https://github.com/hemphen/hass-clevertouch.git clevertouch --branch v0.2.4
 ```
 
 ### 3. By manually downloading the release file
