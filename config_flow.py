@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from clevertouch import ApiSession, ApiError
+from clevertouch import ApiSession, ApiAuthError, ApiConnectError
 
 from .const import DOMAIN
 
@@ -36,17 +36,13 @@ class ClevertouchHub:
 
     async def authenticate(self, email: str, password: str) -> bool:
         """Authenticates with the CleverTouch api"""
-        try:
-            if self.session is None:
-                self.session = ApiSession(email)
-            elif self.session.email != email:
-                self.session.close()
-                self.session = ApiSession(email)
-            await self.session.authenticate(email, password)
-        except ApiError:
-            return False
-        else:
-            return True
+        if self.session is None:
+            self.session = ApiSession(email)
+        elif self.session.email != email:
+            await self.session.close()
+            self.session = ApiSession(email)
+        await self.session.authenticate(email, password)
+        return self.session.token is not None
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
@@ -56,15 +52,17 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     hub = ClevertouchHub()
 
-    if not await hub.authenticate(data["email"], data["password"]):
-        raise InvalidAuth
+    try:
+        if not await hub.authenticate(data["email"], data["password"]):
+            raise InvalidAuth
+    except ApiAuthError as ex:
+        raise InvalidAuth from ex
+    except ApiConnectError as ex:
+        raise CannotConnect from ex
 
-    # If you cannot connect:
-    # throw CannotConnect
-    # If the authentication is wrong:
-    # InvalidAuth
+    if not hub.session or not hub.session.email or not hub.session.token:
+        raise CannotConnect
 
-    # Return info that you want to store in the config entry.
     return {
         "title": "CleverTouch",
         "email": hub.session.email,

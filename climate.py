@@ -9,14 +9,23 @@ from homeassistant.components.climate import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    UnitOfTemperature,
+    ATTR_TEMPERATURE,
 )
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from clevertouch.devices import Radiator, HeatMode
+from .const import (
+    DOMAIN,
+    TEMP_HA_UNIT,
+    TEMP_NATIVE_UNIT,
+    TEMP_NATIVE_STEP,
+    TEMP_NATIVE_MIN,
+    TEMP_NATIVE_MAX,
+    TEMP_NATIVE_PRECISION,
+)
+from clevertouch.devices import Radiator, HeatMode, TempType
+from clevertouch.devices.radiator import Temperature
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 
@@ -53,6 +62,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
 
         self._attr_hvac_modes = []  # HVACMode.HEAT, HVACMode.OFF, HVACMode.AUTO]
         self._attr_preset_modes = radiator.modes
+        self._radiator = radiator
 
         self.entity_description = ClimateEntityDescription(
             icon="mdi:radiator",
@@ -61,14 +71,14 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         )
         self._attr_unique_id = f"{radiator.device_id}-{self.entity_description.key}"
 
-        self._attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
+        self._attr_target_temperature_step = TEMP_NATIVE_STEP
+        self._attr_precision = TEMP_NATIVE_PRECISION
+        self._attr_temperature_unit = TEMP_HA_UNIT
+        self._attr_min_temp = TEMP_NATIVE_MIN
+        self._attr_max_temp = TEMP_NATIVE_MAX
         self._attr_supported_features = (
             ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
         )
-
-    @property
-    def _radiator(self) -> Radiator:
-        return self.device
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -98,14 +108,53 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
     @property
     def current_temperature(self) -> Optional[float]:
         """Return the current temperature."""
-        return self._radiator.temperatures["current"].farenheit
+        temp = self._radiator.temperatures["current"].as_unit(TEMP_NATIVE_UNIT)
+        if isinstance(temp, float):
+            temp = round(temp, 1)
+        return temp
 
     @property
     def target_temperature(self) -> Optional[float]:
         """Return the temperature we try to reach."""
-        return self._radiator.temperatures["target"].farenheit
+        temp = self._radiator.temperatures["target"].as_unit(TEMP_NATIVE_UNIT)
+        if isinstance(temp, float):
+            temp = round(temp, 1)
+        return temp
 
     @property
     def preset_mode(self) -> Optional[str]:
         """Return the preset_mode."""
         return self._radiator.heat_mode
+
+    async def async_set_preset_mode(self, preset_mode):
+        """Set preset mode"""
+        if self.preset_mode == preset_mode:
+            return
+        await self._radiator.set_heat_mode(preset_mode)
+        self._radiator.heat_mode = preset_mode
+        await self.coordinator.async_request_delayed_refresh()
+
+    async def async_set_temperature(self, **kwargs) -> None:
+        if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
+            return
+        if self._radiator.temp_type is None:
+            return
+        if self._radiator.temp_type == TempType.NONE:
+            return
+        if (
+            self._radiator.temperatures[self._radiator.temp_type].as_unit(
+                TEMP_NATIVE_UNIT
+            )
+            == temperature
+        ):
+            return
+        await self._radiator.set_temperature(
+            self._radiator.temp_type, temperature, TEMP_NATIVE_UNIT
+        )
+        self._radiator.temperatures[self._radiator.temp_type] = Temperature(
+            temperature,
+            TEMP_NATIVE_UNIT,
+            is_writable=True,
+            name=self._radiator.temp_type,
+        )
+        await self.coordinator.async_request_delayed_refresh()
