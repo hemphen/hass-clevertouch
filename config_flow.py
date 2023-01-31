@@ -10,9 +10,8 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from clevertouch.clevertouch import ApiSession, ApiException
+from clevertouch import ApiSession, ApiError
 
 from .const import DOMAIN
 
@@ -32,14 +31,19 @@ class ClevertouchHub:
     TODO Remove this placeholder class and replace with things from your PyPI package.
     """
 
-    def __init__(self, http_session) -> None:
-        self.session = ApiSession(http_session)
+    def __init__(self) -> None:
+        self.session = None
 
     async def authenticate(self, email: str, password: str) -> bool:
         """Authenticates with the CleverTouch api"""
         try:
+            if self.session is None:
+                self.session = ApiSession(email)
+            elif self.session.email != email:
+                self.session.close()
+                self.session = ApiSession(email)
             await self.session.authenticate(email, password)
-        except ApiException:
+        except ApiError:
             return False
         else:
             return True
@@ -50,8 +54,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    http_session = async_get_clientsession(hass)
-    hub = ClevertouchHub(http_session)
+    hub = ClevertouchHub()
 
     if not await hub.authenticate(data["email"], data["password"]):
         raise InvalidAuth

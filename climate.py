@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from clevertouch.clevertouch import Radiator
+from clevertouch.devices import Radiator, DeviceType, HeatMode
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 
@@ -30,7 +30,7 @@ async def async_setup_entry(
         RadiatorEntity(coordinator, device)
         for home in coordinator.homes.values()
         for device in home.devices.values()
-        if device.type == Radiator.DEVICE_RADIATOR
+        if isinstance(device, Radiator)
     ]
 
     async_add_entities(
@@ -52,7 +52,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         super().__init__(coordinator, radiator)
 
         self._attr_hvac_modes = []  # HVACMode.HEAT, HVACMode.OFF, HVACMode.AUTO]
-        self._attr_preset_modes = Radiator._MODES_AVAILABLE
+        self._attr_preset_modes = radiator.modes
 
         self.entity_description = ClimateEntityDescription(
             icon="mdi:radiator",
@@ -73,15 +73,15 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
     @property
     def hvac_mode(self) -> HVACMode:
         """Return current operation ie. heat, cool, idle."""
-        if self._radiator.heat_mode == "off":
+        if self._radiator.heat_mode == HeatMode.OFF:
             return HVACMode.OFF
-        elif self._radiator.heat_mode == "program":
+        elif self._radiator.heat_mode == HeatMode.PROGRAM:
             return HVACMode.AUTO
         return HVACMode.HEAT
 
     @property
     def hvac_action(self) -> HVACAction:
-        if self._radiator.heat_mode == "off":
+        if self._radiator.heat_mode == HeatMode.OFF:
             return HVACAction.OFF
         elif self._radiator.active:
             return HVACAction.HEATING
@@ -89,7 +89,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
 
     @property
     def icon(self) -> Optional[str]:
-        if self._radiator.heat_mode == "off":
+        if self._radiator.heat_mode == HeatMode.OFF:
             return "mdi:radiator-off"
         elif self._radiator.active:
             return "mdi:radiator"

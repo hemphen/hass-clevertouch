@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import DOMAIN
-from clevertouch.clevertouch import Radiator
+from clevertouch.devices import Radiator
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def async_setup_entry(
         TemperatureSensorEntity(coordinator, device, temp.name)
         for home in coordinator.homes.values()
         for device in home.devices.values()
-        if device.type == Radiator.DEVICE_RADIATOR
+        if isinstance(device, Radiator)
         for temp in device.temperatures.values()
         if not temp.is_writable
     ]

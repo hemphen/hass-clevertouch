@@ -17,7 +17,8 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import DOMAIN
-from clevertouch.clevertouch import ApiSession, SmartHome, Device
+from clevertouch import Account, Home, User
+from clevertouch.devices import Device
 
 DEFAULT_SCAN_INTERVAL_SECONDS = 300
 SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS)
@@ -29,10 +30,10 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def __init__(self, hass: HomeAssistant, *, entry: ConfigEntry) -> None:
         """Initialize data updater."""
-        self.api_session: ApiSession = ApiSession(
+        self.api_session: Account = Account(
             entry.data[CONF_EMAIL], entry.data[CONF_TOKEN]
         )
-        self.homes: dict[str, SmartHome] = None
+        self.homes: dict[str, Home] = None
         super().__init__(
             hass,
             _LOGGER,
@@ -75,7 +76,7 @@ class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, device.device_id)},
             manufacturer="Purmo",
-            model=f"Purmo {device.type}",
+            model=f"Purmo {device.device_type}",
             name=f"{device.zone.label} {device.label}",
             via_device=(DOMAIN, coordinator.unique_id),
         )
