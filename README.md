@@ -31,7 +31,7 @@ Easiest (while a bit risky since this is work in progress) would be to install u
 3. Run the command
 
 ```bash
-git clone https://github.com/hemphen/homeassistant-clevertouch.git clevertouch
+git clone https://github.com/hemphen/hass-clevertouch.git clevertouch
 ```
 
 4. Restart HomeAssistant.
@@ -40,7 +40,7 @@ git clone https://github.com/hemphen/homeassistant-clevertouch.git clevertouch
 A specific release can be installed by adding a `--branch` flag to the `clone` command, e.g
 
 ```bash
-git clone https://github.com/hemphen/homeassistant-clevertouch.git clevertouch --branch v2.0.1
+git clone https://github.com/hemphen/hass-clevertouch.git clevertouch --branch v2.0.1
 ```
 
 ### 3. By manually downloading the release file
