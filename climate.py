@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from clevertouch.devices import Radiator, DeviceType, HeatMode
+from clevertouch.devices import Radiator, HeatMode
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 
@@ -56,7 +56,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
 
         self.entity_description = ClimateEntityDescription(
             icon="mdi:radiator",
-            name="Radiator",
+            name="",
             key="radiator",
         )
         self._attr_unique_id = f"{radiator.device_id}-{self.entity_description.key}"
