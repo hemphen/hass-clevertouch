@@ -3,12 +3,12 @@
   "name": "Clever Touch E3",
   "config_flow": true,
   "documentation": "https://github.com/hemphen/homeassistant-clevertouch",
-  "requirements": ["clevertouch==0.2.0b1"],
+  "requirements": ["clevertouch==0.2.0"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
   "dependencies": [],
   "codeowners": ["@hemphen"],
   "iot_class": "cloud_polling",
-  "version": "0.2.2"
+  "version": "0.2.3"
 }
