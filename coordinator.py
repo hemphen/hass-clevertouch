@@ -52,7 +52,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
     async def async_request_delayed_refresh(self) -> None:
         """Request delayed (and quicker) updates after setting a variabled"""
         self._quick_updates.request_quick_update()
-        await self.async_request_refresh()
+        await self.async_refresh()
 
     async def _async_update_data(self) -> None:
         """Fetch data from CleverTouch."""
@@ -162,17 +162,12 @@ class QuickUpdatesController:
         if last_expected_at > self._last_expected_at:
             self._last_expected_at = last_expected_at
 
+        # Always push the update forward, regardless if it was requested already
+        self._next_expected_at = next_expected_at
+
         if self._status == self.INACTIVE:
             self._status = self.PENDING
             _LOGGER.debug("Quick updates were requested")
-
-            # If a standard refresh is scheduled before the quick one
-            # we do not want to delay it further.
-            if self._next_expected_at < next_expected_at:
-                _LOGGER.debug("Next regular update is near, run it ASAP")
-                self._next_expected_at = now
-            else:
-                self._next_expected_at = next_expected_at
             return True
 
         _LOGGER.debug("Quick updates were requested (already active)")
@@ -204,7 +199,7 @@ class QuickUpdatesController:
 
         if self._status == self.PENDING:
             _LOGGER.debug(
-                "Pending delayed update, remembering regular interval: %s",
+                "Pending quick update(s), remembering regular interval: %s",
                 update_interval,
             )
             self._standard_interval = update_interval
@@ -212,21 +207,21 @@ class QuickUpdatesController:
 
         if now < self._next_expected_at:  # An extra refresh
             _LOGGER.debug(
-                "Delayed update. Should be skipped - too early. Waiting %s",
+                "Quick update requested. Should be skipped - too early. Waiting %s",
                 self._interval,
             )
             return False, self._interval
 
         if now < self._last_expected_at:
             _LOGGER.debug(
-                "Running delayed update - not finished - then waiting %s",
+                "Running quick update - not finished - then waiting %s",
                 self._interval,
             )
             return True, self._interval
 
         self._status = self.INACTIVE
         _LOGGER.debug(
-            "Final delayed update, going back to regular interval: %s",
+            "Final quick update, going back to regular interval: %s",
             self._standard_interval,
         )
         return True, self._standard_interval
