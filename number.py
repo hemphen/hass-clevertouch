@@ -1,19 +1,16 @@
 """CleverTouch number entities"""
 from typing import Optional
 import logging
-import asyncio
 
 from homeassistant.components.number import (
     NumberEntityDescription,
     NumberEntity,
     NumberDeviceClass,
 )
-from homeassistant.const import UnitOfTemperature
 from homeassistant.config_entries import ConfigEntry
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import EntityCategory
 
 from clevertouch.devices import Radiator
 from clevertouch.devices.radiator import Temperature
