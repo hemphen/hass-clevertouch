@@ -131,7 +131,6 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         if self.preset_mode == preset_mode:
             return
         await self._radiator.set_heat_mode(preset_mode)
-        self._radiator.heat_mode = preset_mode
         await self.coordinator.async_request_delayed_refresh()
 
     async def async_set_temperature(self, **kwargs) -> None:
@@ -150,11 +149,5 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
             return
         await self._radiator.set_temperature(
             self._radiator.temp_type, temperature, TEMP_NATIVE_UNIT
-        )
-        self._radiator.temperatures[self._radiator.temp_type] = Temperature(
-            temperature,
-            TEMP_NATIVE_UNIT,
-            is_writable=True,
-            name=self._radiator.temp_type,
         )
         await self.coordinator.async_request_delayed_refresh()
