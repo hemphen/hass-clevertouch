@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Optional
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 import logging
 
 
@@ -17,7 +17,12 @@ from homeassistant.helpers.update_coordinator import (
     # UpdateFailed,
 )
 
-from .const import DOMAIN, DEFAULT_SCAN_INTERVAL_SECONDS
+from .const import (
+    DOMAIN,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    QUICK_SCAN_INTERVAL_SECONDS,
+    QUICK_SCAN_COUNT,
+)
 from clevertouch import Account, Home
 from clevertouch.devices import Device
 
@@ -31,6 +36,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
     def __init__(self, hass: HomeAssistant, *, entry: ConfigEntry) -> None:
         """Initialize data updater."""
         self._email = entry.data[CONF_EMAIL]
+        self._unique_id = self._email.lower()
         self.api_session: Account = Account(self._email, entry.data[CONF_TOKEN])
         self.homes: dict[str, Home] = {}
         super().__init__(
@@ -39,29 +45,22 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             name=f"{DOMAIN}-{self._email.lower()}",
             update_interval=SCAN_INTERVAL,
         )
-        self.delayed_update_status: str = "inactive"
-        self.delayed_update_interval: timedelta = timedelta(seconds=30)
-        self.standard_update_interval: Optional[timedelta] = SCAN_INTERVAL
+        self._quick_updates = QuickUpdatesController(
+            timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS), count=QUICK_SCAN_COUNT
+        )
 
     async def async_request_delayed_refresh(self) -> None:
-        if self.delayed_update_status == "inactive":
-            self.delayed_update_status = "requested"
-            await self.async_request_refresh()
+        """Request delayed (and quicker) updates after setting a variabled"""
+        self._quick_updates.request_quick_update()
+        await self.async_refresh()
 
     async def _async_update_data(self) -> None:
         """Fetch data from CleverTouch."""
-        # Check if delayed update is requested"""
-        if self.delayed_update_status == "requested":
-            self.delayed_update_status = "pending"
-            self.standard_update_interval = self.update_interval
-            self.update_interval = self.delayed_update_interval
-            _LOGGER.debug("Initiated delayed update in CleverTouch coordinator")
+        do_update_now, self.update_interval = self._quick_updates.on_updating(
+            self.update_interval
+        )
+        if not do_update_now:
             return
-
-        if self.delayed_update_status == "pending":
-            self.delayed_update_status = "inactive"
-            self.update_interval = self.standard_update_interval
-            _LOGGER.debug("Running delayed update in CleverTouch coordinator")
 
         if not self.homes:
             user = await self.api_session.get_user()
@@ -69,16 +68,16 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                 home_id: await self.api_session.get_home(home_id)
                 for home_id in user.homes
             }
-            _LOGGER.debug("Retrieved %d from CleverTouch", len(self.homes))
+            _LOGGER.debug("Retrieved %d new homes from CleverTouch", len(self.homes))
         else:
             for home in self.homes.values():
                 await home.refresh()
-            _LOGGER.debug("Finished update in CleverTouch coordinator")
+            _LOGGER.debug("Refreshed homes from CleverTouch")
 
     @property
     def unique_id(self) -> str:
         """Return unique id for this coordinator."""
-        return self._email.lower()
+        return self._unique_id
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -87,6 +86,9 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
 
 class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
+    """Base class for a CleverToch entity. Used primarily to group entities
+    by a common device."""
+
     def __init__(
         self, coordinator: CleverTouchUpdateCoordinator, device: Device
     ) -> None:
@@ -100,3 +102,126 @@ class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
             name=f"{device.zone.label} {device.label}",
             via_device=(DOMAIN, coordinator.unique_id),
         )
+
+
+class QuickUpdatesController:
+    """Class to manipulate the frequency of updates in the data coordinator"""
+
+    # The background is that when setting a value in the library, it will not
+    # be reflected in the GUI until the next update
+    #
+    # Additionaly, settings take some time to propagate to the devicess and
+    # back to the controller.
+    #
+    # To make updates appear in the interface as quickly and reliably as possible
+    # we want to poll the API with a higher frequency right after setting a value
+    #
+    # Instead of trying to change the behaviour of the DataCoordinator on a more
+    # fundamental level, we just tuck on this stateful class that help us modifying
+    # the scan interval to increase the frequency of updates on requested.
+
+    INACTIVE = "inactive"
+    PENDING = "pending"
+    RUNNING = "running"
+
+    def __init__(self, interval: timedelta, *, count: int = 1) -> None:
+        self._interval: timedelta = interval
+        self._default_count: int = count
+        self._status = self.INACTIVE
+
+        # Until we know better, set the internal state to trigger an
+        # immediate update when requested
+        now = datetime.now()
+        self._standard_interval: Optional[timedelta] = interval
+        self._last_run_at: datetime = now
+        self._next_expected_at: datetime = now
+        self._last_expected_at: datetime = now
+
+    def request_quick_update(self, *, count: Optional[int] = None) -> bool:
+        """Request quick update(s)
+
+        This method should be called when one (or more) update(s) should
+        be run at a higher frequency than normal, but with a delay.
+
+        If the method returns True, an update should be requested immediately
+        by the caller, e.g:
+
+        if self._quc.request_quick_update():
+            self.async_request_refresh()
+        """
+        now = datetime.now()
+
+        interval = self._interval
+        count = count or self._default_count
+
+        # Valid values if this was the only request to take into account
+        next_expected_at = now + interval * 0.9
+        last_expected_at = now + interval * (count - 0.1)
+
+        # Update time of the last expected quick update if later than before
+        if last_expected_at > self._last_expected_at:
+            self._last_expected_at = last_expected_at
+
+        # Always push the update forward, regardless if it was requested already
+        self._next_expected_at = next_expected_at
+
+        if self._status == self.INACTIVE:
+            self._status = self.PENDING
+            _LOGGER.debug("Quick updates were requested")
+            return True
+
+        _LOGGER.debug("Quick updates were requested (already active)")
+        return False
+
+    def on_updating(
+        self, update_interval: Optional[timedelta]
+    ) -> tuple[bool, Optional[timedelta]]:
+        """Determine action and next interval when updating
+
+        This method should be called on every call to the update method.
+        A tuple (do_update, update_interval) is returned and an
+        actual update should only be run if 'do_update' is true.
+
+        The update interval should always be updated to the returned
+        'update_interval', e.g.:
+
+        do_update, self.update_interval = self._quc.on_updating(self.update_interval)
+        if not do_update:
+            return
+        """
+        now = datetime.now()
+
+        if self._status == self.INACTIVE:
+            self._standard_interval = update_interval
+            interval = update_interval or self._interval
+            self._next_expected_at = now + interval * 0.9
+            return True, update_interval
+
+        if self._status == self.PENDING:
+            _LOGGER.debug(
+                "Pending quick update(s), remembering regular interval: %s",
+                update_interval,
+            )
+            self._standard_interval = update_interval
+            self._status = self.RUNNING
+
+        if now < self._next_expected_at:  # An extra refresh
+            _LOGGER.debug(
+                "Quick update requested. Should be skipped - too early. Waiting %s",
+                self._interval,
+            )
+            return False, self._interval
+
+        if now < self._last_expected_at:
+            _LOGGER.debug(
+                "Running quick update - not finished - then waiting %s",
+                self._interval,
+            )
+            return True, self._interval
+
+        self._status = self.INACTIVE
+        _LOGGER.debug(
+            "Final quick update, going back to regular interval: %s",
+            self._standard_interval,
+        )
+        return True, self._standard_interval
