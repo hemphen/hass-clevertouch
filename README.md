@@ -1,4 +1,4 @@
-# CleverTouch - HomeAssistant integration for Touch E3 radiators
+# CleverTouch - Home Assistant integration for Touch E3 radiators
 
 LVI by Purmo is range of radiators manufactured by the Finnish company Purmo. Some
 models, such as Yali Digital, Parada and Ramo may be monitored and controlled
@@ -6,7 +6,7 @@ centrally using the optional accessory TempCo Touch E3. The Touch E3 may in turn
 be controlled remotely via a CleverTouch cloud account and related mobile and web
 apps.
 
-This HomeAssistant integration provides access to settings and usage data for
+This Home Assistant integration provides access to settings and usage data for
 homes and radiators accessible through CleverTouch accounts.
 
 ## Installation
