@@ -59,3 +59,8 @@ To avoid calling the API too excessively information is updated every three minu
 
 * Installation-wide settings are not available.
 * Schedules for radiators running in program mode are not available.
+
+## API
+
+The API used to communicate with the CleverTouch account is located in a stand-alone repository
+https://github.com/hemphen/clevertouch and is also available on PyPi.
