@@ -3,7 +3,7 @@
   "name": "Clever Touch E3",
   "config_flow": true,
   "documentation": "https://github.com/hemphen/hass-clevertouch",
-  "requirements": ["clevertouch==0.2.2"],
+  "requirements": ["clevertouch==0.2.4"],
   "ssdp": [],
   "zeroconf": [],
   "homekit": {},
