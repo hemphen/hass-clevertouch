@@ -1,13 +1,36 @@
 # CleverTouch - Home Assistant integration for Touch E3 radiators
 
-LVI by Purmo is range of radiators manufactured by the Finnish company Purmo. Some
-models, such as Yali Digital, Parada and Ramo may be monitored and controlled
-centrally using the optional accessory TempCo Touch E3. The Touch E3 may in turn
-be controlled remotely via a CleverTouch cloud account and related mobile and web
+> ***IMPORTANT!***
+>
+> This is not an officially supported integration nor software library.
+> There are no guarantees that the functionality will work as expected.
+>
+> Take caution especially when automating device _configuration_.
+>
+> ***THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND***
+
+## Background
+
+Yali Digital, Parada and Ramo is range of radiators from the Finnish company Purmo(*). The radiators may be monitored and controlled
+_centrally_ and wirelessly using the optional accessory TempCo Touch E3. The Touch E3 may in turn
+be controlled _remotely_ via a CleverTouch cloud account and related mobile and web
 apps.
 
-This Home Assistant integration provides access to settings and usage data for
-homes and radiators accessible through CleverTouch accounts.
+This Home Assistant integration provides access to settings and usage data for homes and radiators accessible through CleverTouch accounts.
+
+(*) Purmo has aquired several brands over time, and the radiator manufacturer might be known as e g LVI, Radson or Finimetal on local markets.
+
+## Other brands
+
+While untested, a number of other product lines seem to be using the same controller software with different branding.
+
+Applications using the following URLs might work, fully or partially.
+
+* Walter Meier Metalplast smart-comfort - [https://www.smartcomfort.waltermeier.com](https://www.smartcomfort.waltermeier.com)
+* Frico PF Smart - [https://fricopfsmart.frico.se](https://fricopfsmart.frico.se)
+* Fenix V24 Wifi - [https://v24.fenixgroup.eu](https://v24.fenixgroup.eu)
+* Vogel & Noot E3 App - [Vogel & Noot E3 App - [https://e3.vogelundnoot.com](https://e3.vogelundnoot.com)
+* CordiVari My Way Cosy Home - [https://cordivarihome.com](https://cordivarihome.com)
 
 ## Installation
 
