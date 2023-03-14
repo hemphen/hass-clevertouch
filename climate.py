@@ -1,3 +1,4 @@
+"""CleverTouch climate entities"""
 from typing import Optional
 
 from homeassistant.components.climate import (
@@ -25,7 +26,6 @@ from .const import (
     TEMP_NATIVE_PRECISION,
 )
 from clevertouch.devices import Radiator, HeatMode, TempType
-from clevertouch.devices.radiator import Temperature
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 
@@ -66,10 +66,9 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
 
         self.entity_description = ClimateEntityDescription(
             icon="mdi:radiator",
-            name="",
+            has_entity_name=False,
             key="radiator",
         )
-        self._attr_unique_id = f"{radiator.device_id}-{self.entity_description.key}"
 
         self._attr_target_temperature_step = TEMP_NATIVE_STEP
         self._attr_precision = TEMP_NATIVE_PRECISION

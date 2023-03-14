@@ -28,14 +28,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     reg = device_registry.async_get(hass)
-    reg.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, coordinator.unique_id)},
-        manufacturer="Purmo",
-        model="Touch E3",
-        name="Touch E3",
-        configuration_url="https://e3.lvi.eu/",
-    )
+
+    for home_id, home in coordinator.homes.items():
+        reg.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, coordinator.get_unique_home_id(home_id))},
+            manufacturer=coordinator.model.manufacturer,
+            model=coordinator.model.controller,
+            name=f"{home.info.label} {coordinator.model.controller}",
+            suggested_area=home.info.label,
+            configuration_url=coordinator.host,
+        )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

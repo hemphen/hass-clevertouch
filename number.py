@@ -72,7 +72,6 @@ class TemperatureNumberEntity(CleverTouchEntity, NumberEntity):
             native_max_value=TEMP_NATIVE_MAX,
             native_min_value=TEMP_NATIVE_MIN,
         )
-        self._attr_unique_id = f"{radiator.device_id}-{self.entity_description.key}"
 
     @property
     def native_value(self) -> Optional[float]:
