@@ -7,7 +7,13 @@ import logging
 
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_EMAIL, CONF_TOKEN
+from homeassistant.const import (
+    CONF_EMAIL,
+    CONF_TOKEN,
+    CONF_USERNAME,
+    CONF_HOST,
+    CONF_MODEL,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 
@@ -22,8 +28,10 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_SECONDS,
     QUICK_SCAN_INTERVAL_SECONDS,
     QUICK_SCAN_COUNT,
+    MODELS,
+    DEFAULT_MODEL_ID,
 )
-from clevertouch import Account, Home
+from clevertouch import Account, Home, User
 from clevertouch.devices import Device
 
 SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS)
@@ -35,14 +43,19 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
     def __init__(self, hass: HomeAssistant, *, entry: ConfigEntry) -> None:
         """Initialize data updater."""
-        self._email = entry.data[CONF_EMAIL]
-        self._unique_id = self._email.lower()
-        self.api_session: Account = Account(self._email, entry.data[CONF_TOKEN])
+        self._email = entry.data.get(CONF_USERNAME) or entry.data[CONF_EMAIL]
+        self.model_id = entry.data.get(CONF_MODEL) or DEFAULT_MODEL_ID
+        self.model = MODELS[self.model_id]
+        self.host = entry.data.get(CONF_HOST) or f"https://{self.model.url}"
+        self.api_session: Account = Account(
+            self._email, entry.data[CONF_TOKEN], host=self.host
+        )
+        self.user: Optional[User] = None
         self.homes: dict[str, Home] = {}
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}-{self._email.lower()}",
+            name=f"{DOMAIN}-{self.model_id}-{self._email.lower()}",
             update_interval=SCAN_INTERVAL,
         )
         self._quick_updates = QuickUpdatesController(
@@ -63,10 +76,10 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             return
 
         if not self.homes:
-            user = await self.api_session.get_user()
+            self.user = await self.api_session.get_user()
             self.homes = {
                 home_id: await self.api_session.get_home(home_id)
-                for home_id in user.homes
+                for home_id in self.user.homes
             }
             _LOGGER.debug("Retrieved %d new homes from CleverTouch", len(self.homes))
         else:
@@ -74,15 +87,9 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                 await home.refresh()
             _LOGGER.debug("Refreshed homes from CleverTouch")
 
-    @property
-    def unique_id(self) -> str:
-        """Return unique id for this coordinator."""
-        return self._unique_id
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for the main device."""
-        return DeviceInfo(identifiers={(DOMAIN, self.unique_id)})
+    def get_unique_home_id(self, home_id) -> str:
+        """Return the unique id for a home."""
+        return f"{self.model_id}_{home_id}"
 
 
 class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
@@ -96,12 +103,17 @@ class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
         self.device: Device = device
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device.device_id)},
-            manufacturer="Purmo",
-            model=f"Purmo {device.device_type}",
+            identifiers={(DOMAIN, f"{coordinator.model_id}_{device.device_id}")},
+            manufacturer=coordinator.model.manufacturer,
+            model=f"{device.device_type}",
             name=f"{device.zone.label} {device.label}",
-            via_device=(DOMAIN, coordinator.unique_id),
+            via_device=(DOMAIN, coordinator.get_unique_home_id(device.home.home_id)),
+            suggested_area=device.zone.label,
         )
+
+    @property
+    def unique_id(self) -> str | None:
+        return f"{self.coordinator.model_id}_{self.device.device_id}_{self.entity_description.key}"
 
 
 class QuickUpdatesController:

@@ -65,7 +65,6 @@ class TemperatureSensorEntity(CleverTouchEntity, SensorEntity):
             state_class=SensorStateClass.MEASUREMENT,
             native_unit_of_measurement=TEMP_HA_UNIT,
         )
-        self._attr_unique_id = f"{radiator.device_id}-{self.entity_description.key}"
 
     @property
     def native_value(self) -> Optional[float]:

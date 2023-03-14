@@ -3,46 +3,55 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import (
+    CONF_TOKEN,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    CONF_EMAIL,
+    CONF_MODEL,
+    CONF_HOST,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectOptionDict,
+)
 
-from clevertouch import ApiSession, ApiAuthError, ApiConnectError
+from clevertouch import ApiSession, ApiAuthError
 
-from .const import DOMAIN
+from .const import DOMAIN, MODELS
 
 _LOGGER = logging.getLogger(__name__)
 
+MODEL_LIST = [
+    SelectOptionDict(value=key, label=f"{value.app} ({value.url})")
+    for key, value in MODELS.items()
+]
+
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("email"): str,
-        vol.Required("password"): str,
+        vol.Required(CONF_HOST): SelectSelector(
+            SelectSelectorConfig(options=MODEL_LIST)
+        ),
+        vol.Required(CONF_USERNAME): TextSelector(
+            TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username")
+        ),
+        vol.Required(CONF_PASSWORD): TextSelector(
+            TextSelectorConfig(
+                type=TextSelectorType.PASSWORD, autocomplete="current-password"
+            )
+        ),
     }
 )
-
-
-class ClevertouchHub:
-    """Placeholder class to make tests pass.
-
-    TODO Remove this placeholder class and replace with things from your PyPI package.
-    """
-
-    def __init__(self) -> None:
-        self.session = None
-
-    async def authenticate(self, email: str, password: str) -> bool:
-        """Authenticates with the CleverTouch api"""
-        if self.session is None:
-            self.session = ApiSession(email)
-        elif self.session.email != email:
-            await self.session.close()
-            self.session = ApiSession(email)
-        await self.session.authenticate(email, password)
-        return self.session.token is not None
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
@@ -50,23 +59,31 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    hub = ClevertouchHub()
+    model_id = data.get(CONF_HOST) or "purmo"
+    username = data.get(CONF_USERNAME) or data.get(CONF_EMAIL)
+    password = data.get(CONF_PASSWORD)
 
-    try:
-        if not await hub.authenticate(data["email"], data["password"]):
-            raise InvalidAuth
-    except ApiAuthError as ex:
-        raise InvalidAuth from ex
-    except ApiConnectError as ex:
-        raise CannotConnect from ex
+    model = MODELS[model_id]
 
-    if not hub.session or not hub.session.email or not hub.session.token:
-        raise CannotConnect
+    host = f"https://{model.url}"
+
+    if not username or not password:
+        raise InvalidAuth
+
+    async with ApiSession(host=host) as session:
+        try:
+            await session.authenticate(username, data[CONF_PASSWORD])
+        except ApiAuthError as ex:
+            raise InvalidAuth from ex
+        except Exception as ex:
+            raise CannotConnect from ex
+        token = session.token
 
     return {
-        "title": "CleverTouch",
-        "email": hub.session.email,
-        "token": hub.session.token,
+        "title": model.app,
+        CONF_USERNAME: username,
+        CONF_TOKEN: token,
+        CONF_MODEL: model_id,
     }
 
 
