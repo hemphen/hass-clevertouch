@@ -1,6 +1,8 @@
 """CleverTouch number entities"""
-from typing import Optional
+from typing import Optional, Callable, Any, Awaitable
 import logging
+
+from math import ceil
 
 from homeassistant.components.number import (
     NumberEntityDescription,
@@ -12,7 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from clevertouch.devices import Radiator
+from clevertouch.devices import Radiator, Device
 from clevertouch.devices.radiator import Temperature
 
 from .const import (
@@ -34,14 +36,48 @@ async def async_setup_entry(
     """Set up CleverTouch number entities."""
     coordinator: CleverTouchUpdateCoordinator = hass.data[DOMAIN].get(entry.entry_id)
 
-    entities = [
-        TemperatureNumberEntity(coordinator, device, temp.name)
-        for home in coordinator.homes.values()
-        for device in home.devices.values()
-        if isinstance(device, Radiator)
-        for temp in device.temperatures.values()
-        if temp.is_writable and temp.name
-    ]
+    entities: list[NumberEntity] = []
+
+    entities.extend(
+        [
+            TemperatureNumberEntity(coordinator, device, temp.name)
+            for home in coordinator.homes.values()
+            for device in home.devices.values()
+            if isinstance(device, Radiator)
+            for temp in device.temperatures.values()
+            if temp.is_writable and temp.name
+        ]
+    )
+
+    def _get_boost_time(dev: Device) -> Optional[int]:
+        return (
+            ceil(dev.boost_time / (60.0 * 60.0)) if isinstance(dev, Radiator) else None
+        )
+
+    async def _set_boost_time(dev: Device, value: int) -> None:
+        if isinstance(dev, Radiator):
+            await dev.set_boost_time(value * 60 * 60)
+
+    entities.extend(
+        [
+            CleverNumberEntity(
+                coordinator,
+                device,
+                NumberEntityDescription(
+                    name="Boost time preset",
+                    key="boost_time_preset",
+                    native_min_value=0,
+                    native_step=1,
+                    native_unit_of_measurement="h",
+                ),
+                _get_boost_time,
+                _set_boost_time,
+            )
+            for home in coordinator.homes.values()
+            for device in home.devices.values()
+            if isinstance(device, Radiator)
+        ]
+    )
 
     async_add_entities(entities)
 
@@ -90,4 +126,33 @@ class TemperatureNumberEntity(CleverTouchEntity, NumberEntity):
             is_writable=True,
             name=self._temp_name,
         )
+        await self.coordinator.async_request_delayed_refresh()
+
+
+class CleverNumberEntity(CleverTouchEntity, NumberEntity):
+    """Representation of a CleverTouch read-only duration."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: CleverTouchUpdateCoordinator,
+        device: Device,
+        description: NumberEntityDescription,
+        getter: Callable[[Device], Any],
+        setter: Callable[[Device, Any], Awaitable[None]],
+    ) -> None:
+        super().__init__(coordinator, device)
+        self._get_value = getter
+        self._set_value = setter
+        self.entity_description = description
+
+    @property
+    def native_value(self) -> Any:
+        return self._get_value(self.device)
+
+    async def async_set_native_value(self, value: Any) -> None:
+        if value == self.native_value:
+            return
+        await self._set_value(self.device, value)
         await self.coordinator.async_request_delayed_refresh()
