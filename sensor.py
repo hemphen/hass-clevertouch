@@ -1,5 +1,5 @@
 """CleverTouch sensor entities"""
-from typing import Optional
+from typing import Optional, Callable, Any
 import logging
 
 from homeassistant.components.sensor import (
@@ -18,7 +18,7 @@ from .const import (
     TEMP_HA_UNIT,
     TEMP_NATIVE_UNIT,
 )
-from clevertouch.devices import Radiator
+from clevertouch.devices import Device, Radiator
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,14 +30,48 @@ async def async_setup_entry(
     """Set up CleverTouch sensor entities."""
     coordinator: CleverTouchUpdateCoordinator = hass.data[DOMAIN].get(entry.entry_id)
 
-    entities = [
-        TemperatureSensorEntity(coordinator, device, temp.name)
-        for home in coordinator.homes.values()
-        for device in home.devices.values()
-        if isinstance(device, Radiator)
-        for temp in device.temperatures.values()
-        if not temp.is_writable and temp.name
-    ]
+    entities: list[SensorEntity] = []
+
+    entities.extend(
+        [
+            TemperatureSensorEntity(coordinator, device, temp.name)
+            for home in coordinator.homes.values()
+            for device in home.devices.values()
+            if isinstance(device, Radiator)
+            for temp in device.temperatures.values()
+            if not temp.is_writable and temp.name
+        ]
+    )
+
+    def _get_boost_time_remaining(dev: Device) -> Optional[int]:
+        if (
+            isinstance(dev, Radiator)
+            and dev.boost_remaining
+            and dev.boost_remaining > 0
+        ):
+            return dev.boost_remaining
+        else:
+            return None
+
+    entities.extend(
+        [
+            CleverSensorEntity(
+                coordinator,
+                device,
+                SensorEntityDescription(
+                    name="Boost time remaining",
+                    key="boost_time_remaining",
+                    device_class=SensorDeviceClass.DURATION,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement="s",
+                ),
+                _get_boost_time_remaining,
+            )
+            for home in coordinator.homes.values()
+            for device in home.devices.values()
+            if isinstance(device, Radiator)
+        ]
+    )
 
     async_add_entities(entities)
 
@@ -72,3 +106,24 @@ class TemperatureSensorEntity(CleverTouchEntity, SensorEntity):
         if isinstance(temp, float):
             temp = round(temp, 1)
         return temp
+
+
+class CleverSensorEntity(CleverTouchEntity, SensorEntity):
+    """Representation of a CleverTouch read-only sensor."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: CleverTouchUpdateCoordinator,
+        device: Device,
+        description: SensorEntityDescription,
+        getter: Callable[[Device], Any],
+    ) -> None:
+        super().__init__(coordinator, device)
+        self._get_value = getter
+        self.entity_description = description
+
+    @property
+    def native_value(self) -> Any:
+        return self._get_value(self.device)
