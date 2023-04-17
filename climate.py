@@ -1,5 +1,8 @@
 """CleverTouch climate entities"""
 from typing import Optional
+from datetime import timedelta
+
+import voluptuous as vol
 
 from homeassistant.components.climate import (
     ClimateEntity,
@@ -14,7 +17,11 @@ from homeassistant.const import (
 )
 
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import (
+    AddEntitiesCallback,
+    async_get_current_platform,
+)
+import homeassistant.helpers.config_validation as cv
 
 from .const import (
     DOMAIN,
@@ -45,6 +52,18 @@ async def async_setup_entry(
     async_add_entities(
         entities,
         update_before_add=True,
+    )
+
+    # add platform service to turn_on/activate scene with advanced options
+    platform = async_get_current_platform()
+    platform.async_register_entity_service(
+        "activate_heat_mode",
+        {
+            vol.Required("mode"): cv.string,
+            vol.Optional("temperature"): cv.positive_float,
+            vol.Optional("duration"): cv.time_period,
+        },
+        "_async_activate_heat_mode",
     )
 
 
@@ -148,5 +167,20 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
             return
         await self._radiator.set_temperature(
             self._radiator.temp_type, temperature, TEMP_NATIVE_UNIT
+        )
+        await self.coordinator.async_request_delayed_refresh()
+
+    async def _async_activate_heat_mode(
+        self,
+        mode: str,
+        *,
+        temperature: Optional[float] = None,
+        duration: Optional[timedelta] = None,
+    ):
+        await self._radiator.activate_mode(
+            mode,
+            temp_value=temperature,
+            temp_unit=TEMP_NATIVE_UNIT if temperature else None,
+            boost_time=int(duration.total_seconds()) if duration else None,
         )
         await self.coordinator.async_request_delayed_refresh()

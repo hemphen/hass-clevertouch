@@ -1,0 +1,38 @@
+# entity service to activate a heat mode
+activate_heat_mode:
+  name: Activate Heat Mode
+  description: Activate a heat mode with additional control over options.
+  target:
+    entity:
+      integration: clevertouch
+      domain: climate
+  fields:
+    mode:
+      name: Heat mode
+      description: Heat mode to activate.
+      required: true
+      default: 'Off'
+      selector:
+        select:
+          options:
+            - 'Off'
+            - 'Frost'
+            - 'Comfort'
+            - 'Program'
+            - 'Eco'
+            - 'Boost'
+    temperature:
+      name: Temperature
+      description: Set the target mode temperature (where applicable).
+      required: false
+      selector:
+        number:
+          min: 5
+          max: 30
+    duration:
+      name: Boost duration
+      description: Duration of boost mode (where applicable).
+      required: false
+      selector:
+        duration:
+          enable_day: true
