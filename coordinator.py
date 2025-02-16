@@ -46,7 +46,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         self._email = entry.data.get(CONF_USERNAME) or entry.data[CONF_EMAIL]
         self.model_id = entry.data.get(CONF_MODEL) or DEFAULT_MODEL_ID
         self.model = MODELS[self.model_id]
-        self.host = entry.data.get(CONF_HOST) or f"https://{self.model.url}"
+        self.host = entry.data.get(CONF_HOST) or self.model.url
         self.api_session: Account = Account(
             self._email, entry.data[CONF_TOKEN], host=self.host
         )

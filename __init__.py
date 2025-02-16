@@ -1,4 +1,5 @@
 """The Clever Touch E3 integration."""
+
 from __future__ import annotations
 
 from homeassistant.helpers import device_registry
@@ -37,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             model=coordinator.model.controller,
             name=f"{home.info.label} {coordinator.model.controller}",
             suggested_area=home.info.label,
-            configuration_url=coordinator.host,
+            configuration_url=f"https://{coordinator.host}",
         )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

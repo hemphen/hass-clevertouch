@@ -65,19 +65,19 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     model = MODELS[model_id]
 
-    host = f"https://{model.url}"
+    host = model.url
 
     if not username or not password:
         raise InvalidAuth
 
     async with ApiSession(host=host) as session:
         try:
-            await session.authenticate(username, data[CONF_PASSWORD])
+            await session.authenticate(username, password)
         except ApiAuthError as ex:
             raise InvalidAuth from ex
         except Exception as ex:
             raise CannotConnect from ex
-        token = session.token
+        token = session.refresh_token
 
     return {
         "title": model.app,
