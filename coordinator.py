@@ -1,4 +1,5 @@
 """Coordinator for CleverTouch."""
+
 from __future__ import annotations
 from typing import Optional
 
@@ -45,6 +46,12 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         """Initialize data updater."""
         self._email = entry.data.get(CONF_USERNAME) or entry.data[CONF_EMAIL]
         self.model_id = entry.data.get(CONF_MODEL) or DEFAULT_MODEL_ID
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=f"{DOMAIN}-{self.model_id}-{self._email.lower()}",
+            update_interval=SCAN_INTERVAL,
+        )
         self.model = MODELS[self.model_id]
         self.host = entry.data.get(CONF_HOST) or self.model.url
         self.api_session: Account = Account(
@@ -52,15 +59,17 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         )
         self.user: Optional[User] = None
         self.homes: dict[str, Home] = {}
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}-{self.model_id}-{self._email.lower()}",
-            update_interval=SCAN_INTERVAL,
-        )
         self._quick_updates = QuickUpdatesController(
             timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS), count=QUICK_SCAN_COUNT
         )
+
+    async def async_update_token(self) -> None:
+        """Handle token updates from the API."""
+        new_token = self.api_session._api_session.refresh_token
+        if self.config_entry[CONF_TOKEN] != new_token:
+            _LOGGER.debug("Token updated for %s", self._email)
+            self.config_entry[CONF_TOKEN] = new_token
+            await self.hass.config_entries.async_update_entry(self.config_entry)
 
     async def async_request_delayed_refresh(self) -> None:
         """Request delayed (and quicker) updates after setting a variabled"""
@@ -86,6 +95,8 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             for home in self.homes.values():
                 await home.refresh()
             _LOGGER.debug("Refreshed homes from CleverTouch")
+
+        await self._async_update_token()
 
     def get_unique_home_id(self, home_id) -> str:
         """Return the unique id for a home."""
