@@ -1,4 +1,5 @@
 """CleverTouch switchentities"""
+
 from typing import Optional, Any
 import logging
 
@@ -43,6 +44,7 @@ class CleverTouchSwitchEntity(CleverTouchEntity, SwitchEntity):
     """Representation of a CleverTouch configurable temperature."""
 
     _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(
         self, coordinator: CleverTouchUpdateCoordinator, switch: OnOffDevice

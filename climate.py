@@ -1,4 +1,5 @@
 """CleverTouch climate entities"""
+
 from typing import Optional
 from datetime import timedelta
 
@@ -71,6 +72,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
     """Representation of a CleverTouch climate entity."""
 
     _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(
         self,
