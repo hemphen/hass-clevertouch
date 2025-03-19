@@ -144,7 +144,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
 
 class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
-    """Base class for a CleverToch entity.
+    """Base class for a CleverTouch entity.
 
     Used primarily to group entities by a common device.
     """
@@ -310,9 +310,9 @@ class QuickUpdatesController:
                 if now < self._next_expected_at:  # An extra refresh
                     _LOGGER.debug(
                         "Quick update requested. Should be skipped - too early. Waiting %s",
-                        self._interval,
+                        self._quick_interval,
                     )
-                    return False, self._interval
+                    return False, self._quick_interval
 
                 if now < self._last_expected_at:
                     _LOGGER.debug(
