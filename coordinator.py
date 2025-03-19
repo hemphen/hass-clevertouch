@@ -276,6 +276,7 @@ class QuickUpdatesController:
         match self._state:
             case self.State.STANDARD:
                 _LOGGER.debug("Quick updates were requested")
+                self._state = self.State.QUICK
                 return True
             case self.State.QUICK:
                 _LOGGER.debug("Quick updates were requested (already active)")
