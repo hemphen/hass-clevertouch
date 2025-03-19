@@ -37,8 +37,7 @@ from clevertouch import (
     Home,
     User,
     ApiAuthError,
-    ApiTemporaryDownError,
-    ApiCallError,
+    ApiError,
 )
 from clevertouch.devices import Device
 
@@ -128,7 +127,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         except ApiAuthError as ex:
             _LOGGER.error("Authorization failed: %s", ex)
             raise ConfigEntryAuthFailed from ex
-        except (ApiCallError, ApiTemporaryDownError) as ex:
+        except ApiError as ex:
             _LOGGER.error("API error: %s", ex)
             self.update_interval = self._quick_updates.on_error()
             _LOGGER.info("Backing off %s", self.update_interval)
