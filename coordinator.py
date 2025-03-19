@@ -123,16 +123,13 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                 _LOGGER.debug("Refreshed homes from CleverTouch")
             await self._async_update_token()
         except ApiAuthError as ex:
-            _LOGGER.error("ApiAuthError caught: %r, type: %s", ex, type(ex))
+            _LOGGER.error("Authorization failed: %s", ex)
             raise ConfigEntryAuthFailed from ex
-        except ApiCallError as ex:
-            _LOGGER.error("ApiCallError caught: %r, type: %s", ex, type(ex))
-            raise UpdateFailed from ex
-        except ApiTemporaryDownError as ex:
-            _LOGGER.warning("API temporarily down: %r, type: %s", ex, type(ex))
+        except (ApiCallError, ApiTemporaryDownError) as ex:
+            _LOGGER.error("API error: %s", ex)
             raise UpdateFailed from ex
         except Exception as ex:
-            _LOGGER.error("Unexpected exception: %r, type: %s", ex, type(ex))
+            _LOGGER.error("Unexpected error: %s, type: %s", ex, type(ex))
             raise
 
     def get_unique_home_id(self, home_id) -> str:
