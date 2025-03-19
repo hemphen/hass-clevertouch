@@ -3,16 +3,15 @@
 from __future__ import annotations
 from typing import Optional
 
+from aiohttp import ClientSession
 from datetime import timedelta, datetime
 import logging
 
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
-    CONF_EMAIL,
     CONF_TOKEN,
     CONF_USERNAME,
-    CONF_HOST,
     CONF_MODEL,
 )
 from homeassistant.core import HomeAssistant
@@ -21,8 +20,9 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
-    # UpdateFailed,
+    UpdateFailed,
 )
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .const import (
     DOMAIN,
@@ -32,44 +32,65 @@ from .const import (
     MODELS,
     DEFAULT_MODEL_ID,
 )
-from clevertouch import Account, Home, User
+from clevertouch import (
+    Account,
+    Home,
+    User,
+    ApiAuthError,
+    ApiTemporaryDownError,
+    ApiCallError,
+)
 from clevertouch.devices import Device
 
 SCAN_INTERVAL = timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS)
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger("clevertouch")
+_LOGGER.setLevel(logging.DEBUG)
+
+type CleverTouchConfigEntry = ConfigEntry[CleverTouchUpdateCoordinator]
 
 
 class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
     """Class to manage fetching CleverTouch data."""
 
-    def __init__(self, hass: HomeAssistant, *, entry: ConfigEntry) -> None:
+    config_entry: CleverTouchConfigEntry
+
+    def __init__(
+        self, hass: HomeAssistant, *, entry: ConfigEntry, session: ClientSession
+    ) -> None:
         """Initialize data updater."""
-        self._email = entry.data.get(CONF_USERNAME) or entry.data[CONF_EMAIL]
+        self._email = entry.data.get(CONF_USERNAME)
         self.model_id = entry.data.get(CONF_MODEL) or DEFAULT_MODEL_ID
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}-{self.model_id}-{self._email.lower()}",
             update_interval=SCAN_INTERVAL,
+            config_entry=entry,
         )
         self.model = MODELS[self.model_id]
-        self.host = entry.data.get(CONF_HOST) or self.model.url
-        self.api_session: Account = Account(
-            self._email, entry.data[CONF_TOKEN], host=self.host
+        self.host = self.model.url
+        self.account: Account = Account(
+            self._email, entry.data[CONF_TOKEN], host=self.host, session=session
         )
         self.user: Optional[User] = None
         self.homes: dict[str, Home] = {}
         self._quick_updates = QuickUpdatesController(
-            timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS), count=QUICK_SCAN_COUNT
+            timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS),
+            count=QUICK_SCAN_COUNT,
         )
 
-    async def async_update_token(self) -> None:
+    async def _async_update_token(self) -> None:
         """Handle token updates from the API."""
-        new_token = self.api_session._api_session.refresh_token
-        if self.config_entry[CONF_TOKEN] != new_token:
+        _LOGGER.debug("Checking if token should be updated")
+        old_token = self.config_entry.data[CONF_TOKEN]
+        new_token = self.account.api.refresh_token
+        if old_token != new_token:
             _LOGGER.debug("Token updated for %s", self._email)
-            self.config_entry[CONF_TOKEN] = new_token
-            await self.hass.config_entries.async_update_entry(self.config_entry)
+            new_data = self.config_entry.data.copy()
+            new_data[CONF_TOKEN] = new_token
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=new_data
+            )
 
     async def async_request_delayed_refresh(self) -> None:
         """Request delayed (and quicker) updates after setting a variabled"""
@@ -78,25 +99,41 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
     async def _async_update_data(self) -> None:
         """Fetch data from CleverTouch."""
+        _LOGGER.debug("Checking if data should be updated")
         do_update_now, self.update_interval = self._quick_updates.on_updating(
             self.update_interval
         )
         if not do_update_now:
             return
 
-        if not self.homes:
-            self.user = await self.api_session.get_user()
-            self.homes = {
-                home_id: await self.api_session.get_home(home_id)
-                for home_id in self.user.homes
-            }
-            _LOGGER.debug("Retrieved %d new homes from CleverTouch", len(self.homes))
-        else:
-            for home in self.homes.values():
-                await home.refresh()
-            _LOGGER.debug("Refreshed homes from CleverTouch")
-
-        await self._async_update_token()
+        _LOGGER.debug("Requesting update")
+        try:
+            if not self.homes:
+                self.user = await self.account.get_user()
+                self.homes = {
+                    home_id: await self.account.get_home(home_id)
+                    for home_id in self.user.homes
+                }
+                _LOGGER.debug(
+                    "Retrieved %d new homes from CleverTouch", len(self.homes)
+                )
+            else:
+                for home in self.homes.values():
+                    await home.refresh()
+                _LOGGER.debug("Refreshed homes from CleverTouch")
+            await self._async_update_token()
+        except ApiAuthError as ex:
+            _LOGGER.error("ApiAuthError caught: %r, type: %s", ex, type(ex))
+            raise ConfigEntryAuthFailed from ex
+        except ApiCallError as ex:
+            _LOGGER.error("ApiCallError caught: %r, type: %s", ex, type(ex))
+            raise UpdateFailed from ex
+        except ApiTemporaryDownError as ex:
+            _LOGGER.warning("API temporarily down: %r, type: %s", ex, type(ex))
+            raise UpdateFailed from ex
+        except Exception as ex:
+            _LOGGER.error("Unexpected exception: %r, type: %s", ex, type(ex))
+            raise
 
     def get_unique_home_id(self, home_id) -> str:
         """Return the unique id for a home."""
