@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
+
 from aiohttp import ClientSession
 from datetime import timedelta, datetime
 import logging
@@ -83,12 +85,19 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             max_backoff=timedelta(seconds=MAX_BACKOFF_SECONDS),
         )
 
+    async def async_call_api[_T](self, api_call: Awaitable[_T]) -> _T:
+        """Preserve rotated tokens even when the API operation fails."""
+        try:
+            return await api_call
+        finally:
+            await self._async_update_token()
+
     async def _async_update_token(self) -> None:
         """Handle token updates from the API."""
         _LOGGER.debug("Checking if token should be updated")
         old_token = self.config_entry.data[CONF_TOKEN]
         new_token = self.account.api.refresh_token
-        if old_token != new_token:
+        if new_token and old_token != new_token:
             _LOGGER.debug("Token updated for %s", self._email)
             new_data = self.config_entry.data.copy()
             new_data[CONF_TOKEN] = new_token
@@ -111,9 +120,9 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
         try:
             if not self.homes:
-                self.user = await self.account.get_user()
+                self.user = await self.async_call_api(self.account.get_user())
                 self.homes = {
-                    home_id: await self.account.get_home(home_id)
+                    home_id: await self.async_call_api(self.account.get_home(home_id))
                     for home_id in self.user.homes
                 }
                 _LOGGER.debug(
@@ -121,9 +130,8 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 for home in self.homes.values():
-                    await home.refresh()
+                    await self.async_call_api(home.refresh())
                 _LOGGER.debug("Refreshed homes from CleverTouch")
-            await self._async_update_token()
             self.update_interval = self._quick_updates.on_success()
         except ApiAuthError as ex:
             _LOGGER.error("Authorization failed: %s", ex)

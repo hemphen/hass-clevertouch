@@ -194,7 +194,9 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         if self._radiator.heat_mode == preset_mode:
             return
         self._remember_heat_mode()
-        await self._radiator.set_heat_mode(preset_mode)
+        await self.coordinator.async_call_api(
+            self._radiator.set_heat_mode(preset_mode)
+        )
         self._remember_heat_mode()
         self.async_write_ha_state()
         await self.coordinator.async_request_delayed_refresh()
@@ -213,8 +215,10 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
             == temperature
         ):
             return
-        await self._radiator.set_temperature(
-            self._radiator.temp_type, temperature, TEMP_NATIVE_UNIT
+        await self.coordinator.async_call_api(
+            self._radiator.set_temperature(
+                self._radiator.temp_type, temperature, TEMP_NATIVE_UNIT
+            )
         )
         await self.coordinator.async_request_delayed_refresh()
 
@@ -226,10 +230,12 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         duration: Optional[timedelta] = None,
     ):
         self._remember_heat_mode()
-        await self._radiator.activate_mode(
-            mode,
-            temp_value=temperature,
-            temp_unit=TEMP_NATIVE_UNIT if temperature else None,
-            boost_time=int(duration.total_seconds()) if duration else None,
+        await self.coordinator.async_call_api(
+            self._radiator.activate_mode(
+                mode,
+                temp_value=temperature,
+                temp_unit=TEMP_NATIVE_UNIT if temperature else None,
+                boost_time=int(duration.total_seconds()) if duration else None,
+            )
         )
         await self.coordinator.async_request_delayed_refresh()
