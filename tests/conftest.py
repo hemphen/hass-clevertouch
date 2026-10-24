@@ -42,6 +42,12 @@ def config_entry(hass: HomeAssistant) -> MockConfigEntry:
 
 
 @pytest.fixture
+def order() -> int:
+    """Use API discovery order unless a test overrides it."""
+    return 1
+
+
+@pytest.fixture
 def home_data(order: int) -> list[dict[str, Any]]:
     """Load synthetic homes in the requested API discovery order."""
     homes = json.loads((Path(__file__).parent / "fixtures/homes.json").read_text())
@@ -53,9 +59,10 @@ def home_data(order: int) -> list[dict[str, Any]]:
 @pytest.fixture
 def mock_api(
     aioclient_mock: AiohttpClientMocker, home_data: list[dict[str, Any]]
-) -> None:
+) -> AiohttpClientMockResponse:
     """Mock token refresh and read endpoints; writes have no registered response."""
-    aioclient_mock.post(
+    token_response = aioclient_mock.request(
+        "post",
         "https://auth.e3.lvi.eu/realms/purmo/protocol/openid-connect/token",
         json={
             "access_token": "offline-access",
@@ -87,3 +94,4 @@ def mock_api(
     aioclient_mock.post(
         "https://e3.lvi.eu/api/v0.1/human/smarthome/read/", side_effect=read_home
     )
+    return token_response
