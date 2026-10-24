@@ -17,7 +17,7 @@ from homeassistant.const import (
     ATTR_TEMPERATURE,
 )
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import (
     AddEntitiesCallback,
     async_get_current_platform,
@@ -35,6 +35,8 @@ from .const import (
 )
 from clevertouch.devices import Radiator, HeatMode, TempType
 from .coordinator import CleverTouchUpdateCoordinator, CleverTouchEntity
+
+PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
@@ -81,9 +83,12 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
     ) -> None:
         super().__init__(coordinator, radiator)
 
-        self._attr_hvac_modes = []  # HVACMode.HEAT, HVACMode.OFF, HVACMode.AUTO]
+        self._attr_hvac_modes = [HVACMode.HEAT, HVACMode.AUTO, HVACMode.OFF]
         self._attr_preset_modes = radiator.modes
         self._radiator = radiator
+        # Reload/restart clears preset history; unknown history uses Comfort.
+        self._last_heat_mode: str = HeatMode.COMFORT
+        self._remember_heat_mode()
 
         self.entity_description = ClimateEntityDescription(
             icon="mdi:radiator",
@@ -97,8 +102,23 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         self._attr_min_temp = TEMP_NATIVE_MIN
         self._attr_max_temp = TEMP_NATIVE_MAX
         self._attr_supported_features = (
-            ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+            ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TURN_ON
+            | ClimateEntityFeature.TURN_OFF
         )
+
+    def _remember_heat_mode(self) -> None:
+        """Remember the last valid non-Off preset reported by the radiator."""
+        mode = self._radiator.heat_mode
+        if mode != HeatMode.OFF and mode in self._attr_preset_modes:
+            self._last_heat_mode = mode
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Remember presets selected outside Home Assistant."""
+        self._remember_heat_mode()
+        super()._handle_coordinator_update()
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -146,11 +166,37 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         """Return the preset_mode."""
         return self._radiator.heat_mode
 
-    async def async_set_preset_mode(self, preset_mode):
-        """Set preset mode"""
-        if self.preset_mode == preset_mode:
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
+        """Restore a manual preset for Heat; map Off and Auto explicitly."""
+        await self.async_set_preset_mode(
+            {
+                HVACMode.OFF: HeatMode.OFF,
+                HVACMode.AUTO: HeatMode.PROGRAM,
+                HVACMode.HEAT: (
+                    HeatMode.COMFORT
+                    if self._last_heat_mode == HeatMode.PROGRAM
+                    else self._last_heat_mode
+                ),
+            }[hvac_mode]
+        )
+
+    async def async_turn_on(self) -> None:
+        """Restore the last active preset, including Program."""
+        if self._radiator.heat_mode == HeatMode.OFF:
+            await self.async_set_preset_mode(self._last_heat_mode)
+
+    async def async_turn_off(self) -> None:
+        """Turn the radiator off while remembering its active preset."""
+        await self.async_set_preset_mode(HeatMode.OFF)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Publish the library's state after the preset write succeeds."""
+        if self._radiator.heat_mode == preset_mode:
             return
+        self._remember_heat_mode()
         await self._radiator.set_heat_mode(preset_mode)
+        self._remember_heat_mode()
+        self.async_write_ha_state()
         await self.coordinator.async_request_delayed_refresh()
 
     async def async_set_temperature(self, **kwargs) -> None:
@@ -179,6 +225,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         temperature: Optional[float] = None,
         duration: Optional[timedelta] = None,
     ):
+        self._remember_heat_mode()
         await self._radiator.activate_mode(
             mode,
             temp_value=temperature,
