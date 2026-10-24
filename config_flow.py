@@ -158,7 +158,7 @@ class CleverTouchFlowHandler(ConfigFlow, domain=DOMAIN):
         if user_input:
             user_input[CONF_MODEL] = self._model
             user_input[CONF_USERNAME] = self._username
-            entry = await self.async_set_unique_id(self._username)
+            entry = self._get_reauth_entry()
 
             try:
                 info = await validate_input(self.hass, user_input)
@@ -171,11 +171,12 @@ class CleverTouchFlowHandler(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 return self.async_update_reload_and_abort(
-                    entry, title=info["title"], data=info, unique_id=self._username
+                    entry, data_updates={CONF_TOKEN: info[CONF_TOKEN]}
                 )
 
         return self.async_show_form(
             step_id="reauth_confirm",
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_PASSWORD): TextSelector(
