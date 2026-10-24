@@ -1,0 +1,65 @@
+[
+  {
+    "smarthome_id": "home-1",
+    "label": "Main home",
+    "zones": [
+      {"num_zone": "1", "zone_label": "Living room"},
+      {"num_zone": "2", "zone_label": "Bedroom"}
+    ],
+    "devices": [
+      {
+        "id": "radiator-1",
+        "id_device": "C1",
+        "label_interface": "Radiator",
+        "num_zone": "1",
+        "gv_mode": "0",
+        "heating_up": "1",
+        "consigne_eco": "626",
+        "consigne_hg": "410",
+        "consigne_confort": "698",
+        "consigne_boost": "770",
+        "temperature_air": "680"
+      },
+      {
+        "id": "radiator-2",
+        "id_device": "C2",
+        "label_interface": "Radiator",
+        "num_zone": "2",
+        "gv_mode": "0",
+        "heating_up": "0",
+        "consigne_eco": "626",
+        "consigne_hg": "410",
+        "consigne_confort": "698",
+        "consigne_boost": "770",
+        "temperature_air": "698"
+      },
+      {
+        "id": "outlet-1",
+        "id_device": "O1",
+        "label_interface": "Outlet",
+        "num_zone": "1",
+        "on_off": "1"
+      }
+    ]
+  },
+  {
+    "smarthome_id": "home-2",
+    "label": "Cabin",
+    "zones": [{"num_zone": "1", "zone_label": "Kitchen"}],
+    "devices": [
+      {
+        "id": "radiator-3",
+        "id_device": "C1",
+        "label_interface": "Radiator",
+        "num_zone": "1",
+        "gv_mode": "3",
+        "heating_up": "0",
+        "consigne_eco": "626",
+        "consigne_hg": "410",
+        "consigne_confort": "698",
+        "consigne_boost": "770",
+        "temperature_air": "626"
+      }
+    ]
+  }
+]
