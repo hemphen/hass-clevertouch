@@ -106,7 +106,8 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             )
 
     async def async_request_delayed_refresh(self) -> None:
-        """Request delayed (and quicker) updates after setting a variable."""
+        """Publish accepted command state and request quicker delayed updates."""
+        self.async_update_listeners()
         if self._quick_updates.request_quick_update():
             await self.async_refresh()
 

@@ -197,8 +197,6 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         await self.coordinator.async_call_api(
             self._radiator.set_heat_mode(preset_mode)
         )
-        self._remember_heat_mode()
-        self.async_write_ha_state()
         await self.coordinator.async_request_delayed_refresh()
 
     async def async_set_temperature(self, **kwargs) -> None:
