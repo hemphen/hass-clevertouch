@@ -74,6 +74,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         )
         self.user: User | None = None
         self.homes: dict[str, Home] = {}
+        self.home_device_ids: dict[str, str] = {}
         self._quick_updates = QuickUpdatesController(
             standard_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS),
             quick_interval=timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS),
@@ -161,7 +162,7 @@ class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
             manufacturer=coordinator.model.manufacturer,
             model=f"{device.device_type}",
             name=f"{device.zone.label} {device.label}",
-            via_device=(DOMAIN, coordinator.get_unique_home_id(device.home.home_id)),
+            via_device_id=coordinator.home_device_ids[device.home.home_id],
             suggested_area=device.zone.label,
         )
 
