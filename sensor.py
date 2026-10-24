@@ -46,8 +46,8 @@ async def async_setup_entry(
     def _get_boost_time_remaining(dev: Device) -> Optional[int]:
         if (
             isinstance(dev, Radiator)
-            and dev.boost_remaining
-            and dev.boost_remaining > 0
+            and dev.boost_remaining is not None
+            and dev.boost_remaining >= 0
         ):
             return dev.boost_remaining
         else:
