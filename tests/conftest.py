@@ -57,8 +57,30 @@ def home_data(order: int) -> list[dict[str, Any]]:
 
 
 @pytest.fixture
+def issued_refresh_token() -> str | None:
+    """Return the token issued by the mocked refresh endpoint."""
+    return "offline-refresh"
+
+
+@pytest.fixture
+def user_read_error() -> Exception | None:
+    """Allow a test to fail a user read after token refresh."""
+    return None
+
+
+@pytest.fixture
+def home_read_error() -> Exception | None:
+    """Allow a test to fail a home read after token refresh."""
+    return None
+
+
+@pytest.fixture
 def mock_api(
-    aioclient_mock: AiohttpClientMocker, home_data: list[dict[str, Any]]
+    aioclient_mock: AiohttpClientMocker,
+    home_data: list[dict[str, Any]],
+    issued_refresh_token: str | None,
+    user_read_error: Exception | None,
+    home_read_error: Exception | None,
 ) -> AiohttpClientMockResponse:
     """Mock token refresh and read endpoints; writes have no registered response."""
     token_response = aioclient_mock.request(
@@ -66,12 +88,13 @@ def mock_api(
         "https://auth.e3.lvi.eu/realms/purmo/protocol/openid-connect/token",
         json={
             "access_token": "offline-access",
-            "refresh_token": "offline-refresh",
+            "refresh_token": issued_refresh_token,
             "expires_in": 3600,
         },
     )
     aioclient_mock.post(
         "https://e3.lvi.eu/api/v0.1/human/user/read/",
+        exc=user_read_error,
         json={
             "code": {"code": "1", "key": "ok", "value": "OK"},
             "data": {"user_id": "offline-user", "smarthomes": home_data},
@@ -85,6 +108,7 @@ def mock_api(
         return AiohttpClientMockResponse(
             method=method,
             url=url,
+            exc=home_read_error,
             json={
                 "code": {"code": "1", "key": "ok", "value": "OK"},
                 "data": homes[data["smarthome_id"]],
