@@ -2,7 +2,6 @@
 
 from typing import Any
 
-from clevertouch import ApiConnectError
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
 from pytest_homeassistant.test_util.aiohttp import (
@@ -13,6 +12,7 @@ from pytest_homeassistant.test_util.aiohttp import (
 from homeassistant.components.climate import HVACMode
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 CLIMATE_ID = "climate.living_room_living_room_radiator"
@@ -113,7 +113,7 @@ async def test_failed_activation_keeps_published_preset(
     before = hass.states.get(CLIMATE_ID)
     calls_before = aioclient_mock.call_count
     loaded_entry.status = 503
-    with pytest.raises(ApiConnectError):
+    with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "clevertouch",
             "activate_heat_mode",

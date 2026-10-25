@@ -176,3 +176,58 @@ async def test_empty_home_discovery_is_refreshed(
     assert len(user_reads) == 2
     assert set(home_reads) == {home["smarthome_id"] for home in home_data}
     assert config_entry.state is ConfigEntryState.LOADED
+
+
+async def test_outage_logged_once_and_recovery(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_api: AiohttpClientMockResponse,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Repeated poll failures log once, and recovery restores availability."""
+    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    caplog.clear()
+    mock_api.status = 503
+    freezer.tick(timedelta(hours=1, seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert (
+        hass.states.get("climate.living_room_living_room_radiator").state
+        == "unavailable"
+    )
+    assert (
+        len(
+            [
+                record
+                for record in caplog.records
+                if record.levelno >= 30 and "clevertouch" in record.name
+            ]
+        )
+        == 1
+    )
+
+    freezer.tick(timedelta(seconds=61))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert (
+        len(
+            [
+                record
+                for record in caplog.records
+                if record.levelno >= 30 and "clevertouch" in record.name
+            ]
+        )
+        == 1
+    )
+
+    mock_api.status = 200
+    freezer.tick(timedelta(seconds=121))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("climate.living_room_living_room_radiator").state == "heat"
+    assert (
+        "Fetching clevertouch-purmo-offline@example.invalid data recovered"
+        in caplog.text
+    )

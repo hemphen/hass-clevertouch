@@ -17,6 +17,7 @@ from yarl import URL
 
 from homeassistant.components.climate import ClimateEntityFeature, HVACMode
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 
 ENTITY_ID = "climate.living_room_living_room_radiator"
 ON_ACTIONS = [
@@ -338,7 +339,7 @@ async def test_failed_write_preserves_state_and_previous_mode(
     )
     successful_write = mock_mode_write.side_effect
     mock_mode_write.side_effect = ApiConnectError("Offline")
-    with pytest.raises(ApiConnectError):
+    with pytest.raises(HomeAssistantError):
         await hass.services.async_call(
             "climate", service, {"entity_id": ENTITY_ID, **service_data}, blocking=True
         )

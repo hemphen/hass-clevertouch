@@ -84,6 +84,10 @@ async def test_reauth_updates_original_entry(
     [
         pytest.param(400, None, "invalid_auth", id="invalid-credentials-400"),
         pytest.param(401, None, "invalid_auth", id="invalid-credentials-401"),
+        pytest.param(503, None, "cannot_connect", id="server-error"),
+        pytest.param(
+            200, RuntimeError("Unexpected failure"), "unknown", id="unexpected"
+        ),
         pytest.param(
             200,
             ClientConnectionError("Offline"),
@@ -135,3 +139,52 @@ async def test_reauth_errors_allow_retry(
     assert config_entry.data == {**original_data, "token": "reauth-refresh"}
     assert len(hass.config_entries.async_entries("clevertouch")) == 1
     reload_entry.assert_awaited_once_with(config_entry.entry_id)
+
+
+@pytest.mark.parametrize(
+    ("status", "error", "expected_error", "unexpected"),
+    [
+        pytest.param(401, None, "invalid_auth", False, id="credentials"),
+        pytest.param(503, None, "cannot_connect", False, id="server"),
+        pytest.param(
+            200, ClientConnectionError("Offline"), "cannot_connect", False, id="network"
+        ),
+        pytest.param(
+            200, RuntimeError("Unexpected failure"), "unknown", True, id="unexpected"
+        ),
+    ],
+)
+async def test_user_flow_error_classification(
+    hass: HomeAssistant,
+    auth_response: AiohttpClientMockResponse,
+    caplog: pytest.LogCaptureFixture,
+    status: int,
+    error: Exception | None,
+    expected_error: str,
+    unexpected: bool,
+) -> None:
+    """Known API failures are shown quietly; programming errors remain diagnosable."""
+    auth_response.status = status
+    auth_response.exc = error
+    result = await hass.config_entries.flow.async_init(
+        "clevertouch", context={"source": "user"}
+    )
+    caplog.clear()
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "username": "offline@example.invalid",
+            "password": "offline-password",
+            "model": "purmo",
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": expected_error}
+    assert ("Unexpected exception" in caplog.text) is unexpected
+    assert len(
+        [
+            record
+            for record in caplog.records
+            if record.levelno >= 30 and "clevertouch" in record.name
+        ]
+    ) == int(unexpected)

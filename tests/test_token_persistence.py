@@ -8,7 +8,6 @@ from typing import Any
 from unittest.mock import patch
 
 from aiohttp import ClientConnectionError
-from clevertouch import ApiAccessTokenError, ApiConnectError
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
@@ -19,6 +18,7 @@ from pytest_homeassistant.test_util.aiohttp import (
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 
@@ -154,9 +154,11 @@ async def test_malformed_replacement_preserves_stored_token(
     ("write_status", "expectation"),
     [
         pytest.param(200, nullcontext, id="success"),
-        pytest.param(503, partial(pytest.raises, ApiConnectError), id="failed-write"),
         pytest.param(
-            401, partial(pytest.raises, ApiAccessTokenError), id="rejected-access-token"
+            503, partial(pytest.raises, HomeAssistantError), id="failed-write"
+        ),
+        pytest.param(
+            401, partial(pytest.raises, HomeAssistantError), id="rejected-access-token"
         ),
     ],
 )
