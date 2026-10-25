@@ -3,47 +3,33 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
+from datetime import datetime, timedelta
+from enum import Enum
+import logging
 
 from aiohttp import ClientSession
-from datetime import timedelta, datetime
-import logging
-from enum import Enum
-from random import randint
+from clevertouch import Account, ApiAccessTokenError, ApiAuthError, ApiError, Home, User
+from clevertouch.devices import Device
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_TOKEN,
-    CONF_USERNAME,
-    CONF_MODEL,
-)
+from homeassistant.const import CONF_MODEL, CONF_TOKEN, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
-
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
-from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
-    DOMAIN,
-    DEFAULT_SCAN_INTERVAL_SECONDS,
-    QUICK_SCAN_INTERVAL_SECONDS,
-    QUICK_SCAN_COUNT,
-    MODELS,
     DEFAULT_MODEL_ID,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    DOMAIN,
+    MODELS,
+    QUICK_SCAN_COUNT,
+    QUICK_SCAN_INTERVAL_SECONDS,
 )
-from clevertouch import (
-    Account,
-    Home,
-    User,
-    ApiAuthError,
-    ApiAccessTokenError,
-    ApiError,
-)
-from clevertouch.devices import Device
-
 
 MIN_BACKOFF_SECONDS = 60
 MAX_BACKOFF_SECONDS = 1800
@@ -92,6 +78,27 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             return await api_call
         finally:
             await self._async_update_token()
+
+    async def async_call_action[_T](self, api_call: Awaitable[_T]) -> _T:
+        """Translate command failures without replaying a potentially accepted write."""
+        try:
+            return await self.async_call_api(api_call)
+        except ApiAccessTokenError as ex:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="access_token_rejected",
+            ) from ex
+        except ApiAuthError as ex:
+            self.config_entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from ex
+        except ApiError as ex:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+            ) from ex
 
     async def _async_update_token(self) -> None:
         """Handle token updates from the API."""
@@ -142,17 +149,14 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             self.update_interval = self._quick_updates.on_error()
             raise UpdateFailed(str(ex)) from ex
         except ApiAuthError as ex:
-            _LOGGER.error("Authorization failed: %s", ex)
             raise ConfigEntryAuthFailed from ex
         except ApiError as ex:
-            _LOGGER.error("API error: %s", ex)
             self.update_interval = self._quick_updates.on_error()
-            _LOGGER.info("Backing off %s", self.update_interval)
-            raise UpdateFailed from ex
-        except Exception as ex:
-            _LOGGER.error("Unexpected error: %s, type: %s", ex, type(ex))
+            _LOGGER.debug("Backing off %s", self.update_interval)
+            raise UpdateFailed(str(ex)) from ex
+        except Exception:
             self.update_interval = self._quick_updates.on_error()
-            _LOGGER.info("Backing off %s", self.update_interval)
+            _LOGGER.debug("Backing off %s", self.update_interval)
             raise
 
     def get_unique_home_id(self, home_id) -> str:

@@ -2,33 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import logging
 from typing import Any
-import voluptuous as vol
-from collections.abc import Mapping
 
-from homeassistant.const import (
-    CONF_TOKEN,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_MODEL,
-)
-from homeassistant.core import HomeAssistant
+from clevertouch import ApiAuthError, ApiError, ApiSession
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.const import CONF_MODEL, CONF_PASSWORD, CONF_TOKEN, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectOptionDict,
 )
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from clevertouch import ApiSession, ApiAuthError
-
-from .const import DOMAIN, MODELS, DEFAULT_MODEL_ID
+from .const import DEFAULT_MODEL_ID, DOMAIN, MODELS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,7 +73,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             await api.authenticate(username, password)
         except ApiAuthError as ex:
             raise InvalidAuth from ex
-        except Exception as ex:
+        except ApiError as ex:
             raise CannotConnect from ex
         token = api.refresh_token
 

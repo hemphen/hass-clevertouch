@@ -70,11 +70,11 @@ class CleverTouchSwitchEntity(CleverTouchEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.is_on:
             return
-        await self.coordinator.async_call_api(self._switch.set_onoff_state(True))
+        await self.coordinator.async_call_action(self._switch.set_onoff_state(True))
         await self.coordinator.async_request_delayed_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if not self.is_on:
             return
-        await self.coordinator.async_call_api(self._switch.set_onoff_state(False))
+        await self.coordinator.async_call_action(self._switch.set_onoff_state(False))
         await self.coordinator.async_request_delayed_refresh()

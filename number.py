@@ -119,7 +119,7 @@ class TemperatureNumberEntity(CleverTouchEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         if value == self.native_value:
             return
-        await self.coordinator.async_call_api(
+        await self.coordinator.async_call_action(
             self._radiator.set_temperature(self._temp_name, value, TEMP_NATIVE_UNIT)
         )
         self._radiator.temperatures[self._temp_name] = Temperature(
@@ -156,5 +156,5 @@ class CleverNumberEntity(CleverTouchEntity, NumberEntity):
     async def async_set_native_value(self, value: Any) -> None:
         if value == self.native_value:
             return
-        await self.coordinator.async_call_api(self._set_value(self.device, value))
+        await self.coordinator.async_call_action(self._set_value(self.device, value))
         await self.coordinator.async_request_delayed_refresh()
