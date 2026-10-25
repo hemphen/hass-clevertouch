@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 from aiohttp import ClientConnectionError
-from clevertouch import ApiConnectError
+from clevertouch import ApiAccessTokenError, ApiConnectError
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant.common import MockConfigEntry
@@ -47,11 +47,12 @@ async def test_rotated_token_survives_failed_setup(
 
 @pytest.mark.usefixtures("mock_api")
 @pytest.mark.parametrize(
-    ("issued_refresh_token", "stored_token"),
+    ("refresh_token_fields", "stored_token"),
     [
-        pytest.param("rotated-refresh", "rotated-refresh", id="replacement"),
-        pytest.param(None, "offline-refresh", id="no-replacement"),
-        pytest.param("", "offline-refresh", id="empty-replacement"),
+        pytest.param(
+            {"refresh_token": "rotated-refresh"}, "rotated-refresh", id="replacement"
+        ),
+        pytest.param({}, "offline-refresh", id="omitted-replacement"),
     ],
 )
 async def test_store_only_valid_replacement_token(
@@ -63,6 +64,22 @@ async def test_store_only_valid_replacement_token(
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
     assert config_entry.data == {**original, "token": stored_token}
+
+
+@pytest.mark.usefixtures("mock_api")
+@pytest.mark.parametrize("issued_refresh_token", [None, ""])
+async def test_malformed_replacement_preserves_stored_token(
+    hass: HomeAssistant, config_entry: MockConfigEntry
+) -> None:
+    """Malformed token responses fail setup without erasing stored credentials."""
+    original = dict(config_entry.data)
+
+    assert not await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert config_entry.data == original
+    assert not hass.config_entries.flow.async_progress()
 
 
 @pytest.mark.parametrize(
@@ -138,6 +155,9 @@ async def test_store_only_valid_replacement_token(
     [
         pytest.param(200, nullcontext, id="success"),
         pytest.param(503, partial(pytest.raises, ApiConnectError), id="failed-write"),
+        pytest.param(
+            401, partial(pytest.raises, ApiAccessTokenError), id="rejected-access-token"
+        ),
     ],
 )
 async def test_entity_action_persists_rotated_token(

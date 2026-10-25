@@ -63,6 +63,12 @@ def issued_refresh_token() -> str | None:
 
 
 @pytest.fixture
+def refresh_token_fields(issued_refresh_token: str | None) -> dict[str, str | None]:
+    """Allow omission to be tested separately from a null replacement."""
+    return {"refresh_token": issued_refresh_token}
+
+
+@pytest.fixture
 def user_read_error() -> Exception | None:
     """Allow a test to fail a user read after token refresh."""
     return None
@@ -75,11 +81,29 @@ def home_read_error() -> Exception | None:
 
 
 @pytest.fixture
+def mock_user_read(
+    aioclient_mock: AiohttpClientMocker,
+    home_data: list[dict[str, Any]],
+    user_read_error: Exception | None,
+) -> AiohttpClientMockResponse:
+    """Expose the user response for discovery and recovery tests."""
+    return aioclient_mock.request(
+        "post",
+        "https://e3.lvi.eu/api/v0.1/human/user/read/",
+        exc=user_read_error,
+        json={
+            "code": {"code": "1", "key": "ok", "value": "OK"},
+            "data": {"user_id": "offline-user", "smarthomes": home_data},
+        },
+    )
+
+
+@pytest.fixture
 def mock_api(
     aioclient_mock: AiohttpClientMocker,
     home_data: list[dict[str, Any]],
-    issued_refresh_token: str | None,
-    user_read_error: Exception | None,
+    refresh_token_fields: dict[str, str | None],
+    mock_user_read: AiohttpClientMockResponse,
     home_read_error: Exception | None,
 ) -> AiohttpClientMockResponse:
     """Mock token refresh and read endpoints; writes have no registered response."""
@@ -88,16 +112,8 @@ def mock_api(
         "https://auth.e3.lvi.eu/realms/purmo/protocol/openid-connect/token",
         json={
             "access_token": "offline-access",
-            "refresh_token": issued_refresh_token,
+            **refresh_token_fields,
             "expires_in": 3600,
-        },
-    )
-    aioclient_mock.post(
-        "https://e3.lvi.eu/api/v0.1/human/user/read/",
-        exc=user_read_error,
-        json={
-            "code": {"code": "1", "key": "ok", "value": "OK"},
-            "data": {"user_id": "offline-user", "smarthomes": home_data},
         },
     )
     homes = {home["smarthome_id"]: home for home in home_data}

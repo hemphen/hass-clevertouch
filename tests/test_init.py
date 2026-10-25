@@ -1,6 +1,8 @@
 """Test startup failures and recovery."""
 
 from datetime import timedelta
+from typing import Any
+from unittest.mock import patch
 
 from aiohttp import ClientConnectionError, ServerTimeoutError
 from freezegun.api import FrozenDateTimeFactory
@@ -101,3 +103,76 @@ async def test_setup_auth_failure_starts_reauth(
     assert len(flows) == 1
     assert flows[0]["context"]["source"] == SOURCE_REAUTH
     assert flows[0]["context"]["entry_id"] == config_entry.entry_id
+
+
+@pytest.mark.usefixtures("mock_api")
+async def test_resource_401_retries_without_reauth(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    mock_user_read: AiohttpClientMockResponse,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Access-token rejection should retry setup without demanding new credentials."""
+    mock_user_read.status = 401
+
+    assert not await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert not hass.config_entries.flow.async_progress()
+    assert aioclient_mock.call_count == 2
+
+    mock_user_read.status = 200
+    freezer.tick(timedelta(seconds=6))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert len(hass.states.async_all("climate")) == 3
+    assert not hass.config_entries.flow.async_progress()
+    refreshes = [
+        call for call in aioclient_mock.mock_calls if call[1].path.endswith("/token")
+    ]
+    assert len(refreshes) == 2
+
+
+@pytest.mark.usefixtures("mock_api")
+async def test_empty_home_discovery_is_refreshed(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    home_data: list[dict[str, Any]],
+    mock_user_read: AiohttpClientMockResponse,
+    aioclient_mock: AiohttpClientMocker,
+) -> None:
+    """An initially empty cached user must not stop subsequent discovery reads."""
+    with patch.object(
+        mock_user_read,
+        "json",
+        return_value={
+            "code": {"code": "1", "key": "ok", "value": "OK"},
+            "data": {"user_id": "offline-user", "smarthomes": []},
+        },
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 2
+
+    # No entities exist yet to subscribe to coordinator polling.
+    coordinator = hass.data["clevertouch"][config_entry.entry_id]
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    user_reads = [
+        call
+        for call in aioclient_mock.mock_calls
+        if call[1].path == "/api/v0.1/human/user/read/"
+    ]
+    home_reads = [
+        call[2]["smarthome_id"]
+        for call in aioclient_mock.mock_calls
+        if call[1].path == "/api/v0.1/human/smarthome/read/"
+    ]
+    assert len(user_reads) == 2
+    assert set(home_reads) == {home["smarthome_id"] for home in home_data}
+    assert config_entry.state is ConfigEntryState.LOADED
