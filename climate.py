@@ -232,8 +232,10 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
             self._radiator.activate_mode(
                 mode,
                 temp_value=temperature,
-                temp_unit=TEMP_NATIVE_UNIT if temperature else None,
-                boost_time=int(duration.total_seconds()) if duration else None,
+                temp_unit=TEMP_NATIVE_UNIT if temperature is not None else None,
+                boost_time=(
+                    int(duration.total_seconds()) if duration is not None else None
+                ),
             )
         )
         await self.coordinator.async_request_delayed_refresh()
