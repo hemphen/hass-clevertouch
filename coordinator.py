@@ -39,6 +39,7 @@ from clevertouch import (
     Home,
     User,
     ApiAuthError,
+    ApiAccessTokenError,
     ApiError,
 )
 from clevertouch.devices import Device
@@ -121,7 +122,10 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
         try:
             if not self.homes:
-                self.user = await self.async_call_api(self.account.get_user())
+                if self.user is None:
+                    self.user = await self.async_call_api(self.account.get_user())
+                else:
+                    await self.async_call_api(self.user.refresh())
                 self.homes = {
                     home_id: await self.async_call_api(self.account.get_home(home_id))
                     for home_id in self.user.homes
@@ -134,6 +138,9 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                     await self.async_call_api(home.refresh())
                 _LOGGER.debug("Refreshed homes from CleverTouch")
             self.update_interval = self._quick_updates.on_success()
+        except ApiAccessTokenError as ex:
+            self.update_interval = self._quick_updates.on_error()
+            raise UpdateFailed(str(ex)) from ex
         except ApiAuthError as ex:
             _LOGGER.error("Authorization failed: %s", ex)
             raise ConfigEntryAuthFailed from ex
