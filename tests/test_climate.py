@@ -490,3 +490,51 @@ async def test_activate_heat_mode_is_preserved(
     async_fire_time_changed(hass)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get(ENTITY_ID).attributes["preset_mode"] == "Boost"
+
+
+@pytest.mark.usefixtures("loaded_entry")
+@pytest.mark.parametrize(
+    ("activation_data", "expected_optional_payload"),
+    [
+        pytest.param({}, {}, id="omitted"),
+        pytest.param(
+            {"temperature": 0},
+            {"query[consigne_boost]": 320},
+            id="zero-temperature",
+        ),
+        pytest.param(
+            {"duration": {"seconds": 0}},
+            {"query[time_boost]": 0},
+            id="zero-duration",
+        ),
+        pytest.param(
+            {"temperature": 0, "duration": {"seconds": 0}},
+            {"query[consigne_boost]": 320, "query[time_boost]": 0},
+            id="both-zero",
+        ),
+    ],
+)
+async def test_activation_distinguishes_zero_from_omitted_arguments(
+    hass: HomeAssistant,
+    mock_mode_write: AsyncMock,
+    activation_data: dict[str, Any],
+    expected_optional_payload: dict[str, int],
+) -> None:
+    """Forward explicit zero values and leave omitted activation fields unset."""
+    await hass.services.async_call(
+        "clevertouch",
+        "activate_heat_mode",
+        {"entity_id": ENTITY_ID, "mode": "Boost", **activation_data},
+        blocking=True,
+    )
+    assert mock_mode_write.await_count == 1
+    payload = mock_mode_write.await_args.args[2]
+    assert payload == {
+        "smarthome_id": "home-1",
+        "context": 1,
+        "peremption": 15000,
+        "query[id_device]": "C1",
+        "query[gv_mode]": "4",
+        "query[nv_mode]": "4",
+        **expected_optional_payload,
+    }
