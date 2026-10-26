@@ -190,12 +190,12 @@ async def test_user_flow_error_classification(
     ) == int(unexpected)
 
 
-@pytest.mark.parametrize("token", [None, ""], ids=["missing", "empty"])
+@pytest.mark.parametrize("token", [None, "", 123, True, {"token": "bad"}])
 async def test_reauth_requires_refresh_token(
     hass: HomeAssistant,
     config_entry: MockConfigEntry,
     aioclient_mock: AiohttpClientMocker,
-    token: str | None,
+    token: object,
 ) -> None:
     """Reject a login that does not return a usable refresh token."""
     original_data = dict(config_entry.data)
@@ -209,5 +209,5 @@ async def test_reauth_requires_refresh_token(
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_auth"}
+    assert result["errors"] == {"base": "cannot_connect"}
     assert config_entry.data == original_data

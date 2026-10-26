@@ -94,6 +94,6 @@ Run the offline tests with:
 
 ```
 pip install -r requirements_test.txt
-pip install clevertouch  # version from manifest.json
+pip install $(python -c "import json; print(*json.load(open('manifest.json'))['requirements'])")
 pytest
 ```
