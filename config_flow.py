@@ -77,6 +77,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             raise CannotConnect from ex
         token = api.refresh_token
 
+    if not token:
+        raise InvalidAuth
+
     return {
         "title": model.app,
         CONF_USERNAME: username,

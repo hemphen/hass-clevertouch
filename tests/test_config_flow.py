@@ -4,8 +4,8 @@ from unittest.mock import patch
 
 from aiohttp import ClientConnectionError, ServerTimeoutError
 import pytest
-from pytest_homeassistant.common import MockConfigEntry
-from pytest_homeassistant.test_util.aiohttp import (
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
@@ -188,3 +188,26 @@ async def test_user_flow_error_classification(
             if record.levelno >= 30 and "clevertouch" in record.name
         ]
     ) == int(unexpected)
+
+
+@pytest.mark.parametrize("token", [None, ""], ids=["missing", "empty"])
+async def test_reauth_requires_refresh_token(
+    hass: HomeAssistant,
+    config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    token: str | None,
+) -> None:
+    """Reject a login that does not return a usable refresh token."""
+    original_data = dict(config_entry.data)
+    aioclient_mock.post(
+        "https://auth.e3.lvi.eu/realms/purmo/protocol/openid-connect/token",
+        json={"access_token": "offline-access", "refresh_token": token, "expires_in": 3600},
+    )
+    result = await config_entry.start_reauth_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"password": "offline-password"}
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "invalid_auth"}
+    assert config_entry.data == original_data
