@@ -98,7 +98,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
 
         self._attr_target_temperature_step = TEMP_NATIVE_STEP
         self._attr_precision = TEMP_NATIVE_PRECISION
-        self._attr_native_temperature_unit = TEMP_HA_UNIT
+        self._attr_temperature_unit = TEMP_HA_UNIT
         self._attr_min_temp = TEMP_NATIVE_MIN
         self._attr_max_temp = TEMP_NATIVE_MAX
         self._attr_supported_features = (
@@ -146,7 +146,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         return "mdi:radiator-disabled"
 
     @property
-    def native_current_temperature(self) -> Optional[float]:
+    def current_temperature(self) -> Optional[float]:
         """Return the current temperature."""
         temp = self._radiator.temperatures["current"].as_unit(TEMP_NATIVE_UNIT)
         if isinstance(temp, float):
@@ -154,7 +154,7 @@ class RadiatorEntity(CleverTouchEntity, ClimateEntity):
         return temp
 
     @property
-    def native_target_temperature(self) -> Optional[float]:
+    def target_temperature(self) -> Optional[float]:
         """Return the temperature we try to reach."""
         temp = self._radiator.temperatures["target"].as_unit(TEMP_NATIVE_UNIT)
         if isinstance(temp, float):
