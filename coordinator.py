@@ -2,45 +2,34 @@
 
 from __future__ import annotations
 
-from aiohttp import ClientSession
-from datetime import timedelta, datetime
-import logging
+from collections.abc import Awaitable
+from datetime import datetime, timedelta
 from enum import Enum
-from random import randint
+import logging
+
+from aiohttp import ClientSession
+from clevertouch import Account, ApiAccessTokenError, ApiAuthError, ApiError, Home, User
+from clevertouch.devices import Device
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_TOKEN,
-    CONF_USERNAME,
-    CONF_MODEL,
-)
+from homeassistant.const import CONF_MODEL, CONF_TOKEN, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo
-
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
     UpdateFailed,
 )
-from homeassistant.exceptions import ConfigEntryAuthFailed
 
 from .const import (
-    DOMAIN,
-    DEFAULT_SCAN_INTERVAL_SECONDS,
-    QUICK_SCAN_INTERVAL_SECONDS,
-    QUICK_SCAN_COUNT,
-    MODELS,
     DEFAULT_MODEL_ID,
+    DEFAULT_SCAN_INTERVAL_SECONDS,
+    DOMAIN,
+    MODELS,
+    QUICK_SCAN_COUNT,
+    QUICK_SCAN_INTERVAL_SECONDS,
 )
-from clevertouch import (
-    Account,
-    Home,
-    User,
-    ApiAuthError,
-    ApiError,
-)
-from clevertouch.devices import Device
-
 
 MIN_BACKOFF_SECONDS = 60
 MAX_BACKOFF_SECONDS = 1800
@@ -74,6 +63,7 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
         )
         self.user: User | None = None
         self.homes: dict[str, Home] = {}
+        self.home_device_ids: dict[str, str] = {}
         self._quick_updates = QuickUpdatesController(
             standard_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL_SECONDS),
             quick_interval=timedelta(seconds=QUICK_SCAN_INTERVAL_SECONDS),
@@ -82,12 +72,40 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             max_backoff=timedelta(seconds=MAX_BACKOFF_SECONDS),
         )
 
+    async def async_call_api[_T](self, api_call: Awaitable[_T]) -> _T:
+        """Preserve rotated tokens even when the API operation fails."""
+        try:
+            return await api_call
+        finally:
+            await self._async_update_token()
+
+    async def async_call_action[_T](self, api_call: Awaitable[_T]) -> _T:
+        """Translate command failures without replaying a potentially accepted write."""
+        try:
+            return await self.async_call_api(api_call)
+        except ApiAccessTokenError as ex:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="access_token_rejected",
+            ) from ex
+        except ApiAuthError as ex:
+            self.config_entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_auth",
+            ) from ex
+        except ApiError as ex:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+            ) from ex
+
     async def _async_update_token(self) -> None:
         """Handle token updates from the API."""
         _LOGGER.debug("Checking if token should be updated")
         old_token = self.config_entry.data[CONF_TOKEN]
         new_token = self.account.api.refresh_token
-        if old_token != new_token:
+        if new_token and old_token != new_token:
             _LOGGER.debug("Token updated for %s", self._email)
             new_data = self.config_entry.data.copy()
             new_data[CONF_TOKEN] = new_token
@@ -96,7 +114,8 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
             )
 
     async def async_request_delayed_refresh(self) -> None:
-        """Request delayed (and quicker) updates after setting a variable."""
+        """Publish accepted command state and request quicker delayed updates."""
+        self.async_update_listeners()
         if self._quick_updates.request_quick_update():
             await self.async_refresh()
 
@@ -110,9 +129,12 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
 
         try:
             if not self.homes:
-                self.user = await self.account.get_user()
+                if self.user is None:
+                    self.user = await self.async_call_api(self.account.get_user())
+                else:
+                    await self.async_call_api(self.user.refresh())
                 self.homes = {
-                    home_id: await self.account.get_home(home_id)
+                    home_id: await self.async_call_api(self.account.get_home(home_id))
                     for home_id in self.user.homes
                 }
                 _LOGGER.debug(
@@ -120,22 +142,21 @@ class CleverTouchUpdateCoordinator(DataUpdateCoordinator[None]):
                 )
             else:
                 for home in self.homes.values():
-                    await home.refresh()
+                    await self.async_call_api(home.refresh())
                 _LOGGER.debug("Refreshed homes from CleverTouch")
-            await self._async_update_token()
             self.update_interval = self._quick_updates.on_success()
+        except ApiAccessTokenError as ex:
+            self.update_interval = self._quick_updates.on_error()
+            raise UpdateFailed(str(ex)) from ex
         except ApiAuthError as ex:
-            _LOGGER.error("Authorization failed: %s", ex)
             raise ConfigEntryAuthFailed from ex
         except ApiError as ex:
-            _LOGGER.error("API error: %s", ex)
             self.update_interval = self._quick_updates.on_error()
-            _LOGGER.info("Backing off %s", self.update_interval)
-            raise UpdateFailed from ex
-        except Exception as ex:
-            _LOGGER.error("Unexpected error: %s, type: %s", ex, type(ex))
+            _LOGGER.debug("Backing off %s", self.update_interval)
+            raise UpdateFailed(str(ex)) from ex
+        except Exception:
             self.update_interval = self._quick_updates.on_error()
-            _LOGGER.info("Backing off %s", self.update_interval)
+            _LOGGER.debug("Backing off %s", self.update_interval)
             raise
 
     def get_unique_home_id(self, home_id) -> str:
@@ -161,7 +182,7 @@ class CleverTouchEntity(CoordinatorEntity[CleverTouchUpdateCoordinator]):
             manufacturer=coordinator.model.manufacturer,
             model=f"{device.device_type}",
             name=f"{device.zone.label} {device.label}",
-            via_device=(DOMAIN, coordinator.get_unique_home_id(device.home.home_id)),
+            via_device_id=coordinator.home_device_ids[device.home.home_id],
             suggested_area=device.zone.label,
         )
 

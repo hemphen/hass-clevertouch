@@ -1,21 +1,40 @@
 {
-    "config": {
-        "abort": {
-            "already_configured": "Device is already configured"
-        },
-        "error": {
-            "cannot_connect": "Failed to connect",
-            "invalid_auth": "Invalid authentication",
-            "unknown": "Unexpected error"
-        },
-        "step": {
-            "user": {
-                "data": {
-                    "host": "Host",
-                    "password": "Password",
-                    "username": "Username"
-                }
-            }
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "model": "Provider"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate CleverTouch",
+        "description": "Your CleverTouch credentials are no longer valid. Enter your password to reconnect.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Reauthentication was successful"
     }
+  },
+  "exceptions": {
+    "access_token_rejected": {
+      "message": "CleverTouch could not authorize the command. Please try again."
+    },
+    "invalid_auth": {
+      "message": "CleverTouch authentication failed. Reauthenticate the integration and try again."
+    },
+    "command_failed": {
+      "message": "The CleverTouch command failed. Check your connection and the provider app, then try again."
+    }
+  }
 }
