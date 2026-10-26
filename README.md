@@ -87,3 +87,13 @@ To avoid calling the API too excessively information is updated every three minu
 
 The API used to communicate with the CleverTouch account is located in a stand-alone repository
 https://github.com/hemphen/clevertouch and is also available on PyPi.
+
+## Development
+
+Run the offline tests with:
+
+```
+pip install -r requirements_test.txt
+pip install clevertouch  # version from manifest.json
+pytest
+```

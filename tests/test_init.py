@@ -7,8 +7,8 @@ from unittest.mock import patch
 from aiohttp import ClientConnectionError, ServerTimeoutError
 from freezegun.api import FrozenDateTimeFactory
 import pytest
-from pytest_homeassistant.common import MockConfigEntry, async_fire_time_changed
-from pytest_homeassistant.test_util.aiohttp import (
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
