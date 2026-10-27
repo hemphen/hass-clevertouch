@@ -14,19 +14,9 @@ from homeassistant.helpers import entity_registry as er
 @pytest.mark.parametrize(
     ("boost_data", "expected_state"),
     [
-        pytest.param(
-            {"time_boost_format_chrono": {"m": "5", "s": "21"}},
-            "321",
-            id="positive-seconds",
-        ),
-        pytest.param({"time_boost_format_chrono": {"s": "0"}}, "0", id="known-zero"),
-        pytest.param({}, STATE_UNKNOWN, id="missing"),
-        pytest.param({"time_boost_format_chrono": {}}, STATE_UNKNOWN, id="empty"),
-        pytest.param(
-            {"time_boost_format_chrono": {"s": "-1"}},
-            STATE_UNKNOWN,
-            id="negative",
-        ),
+        pytest.param({"gv_mode": "4", "time_boost": "2460"}, "2460", id="running"),
+        pytest.param({"gv_mode": "4", "time_boost": "0"}, "0", id="running-zero"),
+        pytest.param({"gv_mode": "3", "time_boost": "7200"}, STATE_UNKNOWN, id="idle"),
     ],
 )
 async def test_boost_time_remaining(
